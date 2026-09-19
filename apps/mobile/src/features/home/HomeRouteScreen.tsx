@@ -1,3 +1,5 @@
+import { use } from "react";
+import { NativePrimaryColumnContext } from "../../native/v5-workspace-context";
 import * as Arr from "effect/Array";
 import * as Order from "effect/Order";
 import { useNavigation } from "@react-navigation/native";
@@ -27,6 +29,7 @@ import { getConnectionAwareBrandHeaderOptions } from "./WorkspaceConnectionTitle
 
 export function HomeRouteScreen() {
   const { width: windowWidth } = useWindowDimensions();
+  const nativePrimaryColumn = use(NativePrimaryColumnContext);
   const { layout, panes } = useAdaptiveWorkspaceLayout();
   const projects = useProjects();
   const threads = useThreadShells();
@@ -104,7 +107,7 @@ export function HomeRouteScreen() {
 
   // In split layouts the persistent sidebar IS the thread list — Home becomes
   // an empty detail pane so selecting a thread never transitions layouts.
-  if (layout.usesSplitView) {
+  if (layout.usesSplitView && !nativePrimaryColumn) {
     return (
       <>
         <NativeStackScreenOptions
