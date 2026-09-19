@@ -17,7 +17,7 @@ import {
 } from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
 import { useFocusEffect } from "@react-navigation/native";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -34,7 +34,9 @@ import { EmptyState } from "../../components/EmptyState";
 import { MaterialFloatingActionButton } from "../../components/MaterialFloatingActionButton";
 import type { WorkspaceEnvironment, WorkspaceState } from "../../state/workspaceModel";
 import type { SavedRemoteConnection } from "../../lib/connection";
-import { scopedProjectKey } from "../../lib/scopedEntities";
+import { scopedProjectKey, scopedThreadKey } from "../../lib/scopedEntities";
+import { NativePrimaryColumnContext } from "../../native/v5-workspace-context";
+import { useNativeColumnLayoutMetrics } from "../layout/native-layout-metrics";
 import { NATIVE_LIQUID_GLASS_SUPPORTED } from "../../native/native-glass";
 import { useThreadSearch } from "../../state/queries";
 import { useThreadJumpShortcuts } from "../keyboard/threadKeyboardShortcuts";
@@ -224,6 +226,10 @@ function HomeTopContentSpacer() {
 /* ─── Main screen ────────────────────────────────────────────────────── */
 
 export function HomeScreen(props: HomeScreenProps) {
+  const primaryColumn = use(NativePrimaryColumnContext);
+  const columnMetrics = useNativeColumnLayoutMetrics();
+  const selectedThreadKey = primaryColumn?.selectedThreadKey ?? null;
+  const fullSwipeWidth = primaryColumn && columnMetrics ? columnMetrics.width - 20 : undefined;
   const queuedThreadKeys = useQueuedThreadKeys();
   const openSwipeableRef = useRef<SwipeableMethods | null>(null);
   const insets = useSafeAreaInsets();
@@ -623,10 +629,11 @@ export function HomeScreen(props: HomeScreenProps) {
       now: new Date().toISOString(),
       snoozedShelfExpanded,
       settledShelfExpanded,
-      selectedThreadKey: null,
+      selectedThreadKey,
     });
   }, [
     pendingOrder,
+    selectedThreadKey,
     queuedThreadKeys,
     nowMinute,
     snoozeWakeTick,
@@ -759,6 +766,9 @@ export function HomeScreen(props: HomeScreenProps) {
       const thread = item.item.thread;
       return (
         <ThreadListV2Row
+          pane={primaryColumn ? "sidebar" : "screen"}
+          selected={scopedThreadKey(thread.environmentId, thread.id) === selectedThreadKey}
+          fullSwipeWidth={fullSwipeWidth}
           onNewThreadOnBranch={props.onNewThreadOnBranch}
           thread={thread}
           variant={item.item.variant}
@@ -844,6 +854,9 @@ export function HomeScreen(props: HomeScreenProps) {
       props.onDeletePendingTask,
       props.onSelectPendingTask,
       props.onSelectThread,
+      primaryColumn,
+      selectedThreadKey,
+      fullSwipeWidth,
       props.onNewThreadOnBranch,
       props.savedConnectionsById,
       resolveProviderInstance,
@@ -870,11 +883,13 @@ export function HomeScreen(props: HomeScreenProps) {
       serverConfigs,
       savedConnectionsById: props.savedConnectionsById,
       searchQuery: props.searchQuery,
+      selectedThreadKey,
       threadSearchMatchByKey,
     }),
     [
       projectByKey,
       props.searchQuery,
+      selectedThreadKey,
       props.savedConnectionsById,
       serverConfigs,
       threadSearchMatchByKey,
