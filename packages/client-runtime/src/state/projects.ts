@@ -1,3 +1,4 @@
+import type { EnvironmentId } from "@t3tools/contracts";
 import {
   isExplicitRelativePath,
   isUncPath,
@@ -143,6 +144,19 @@ export function isScratchProject(
   return (
     scratchWorkspaceRoot != null && findProjectByPath([project], scratchWorkspaceRoot) !== undefined
   );
+}
+
+/**
+ * Where a thread without a project starts: the machine the user is working
+ * on, and only there. With no current machine, the one machine that offers
+ * it. Null otherwise, never a silent pick; the client asks instead.
+ */
+export function resolveScratchEnvironmentId(
+  current: EnvironmentId | null,
+  offering: ReadonlyArray<EnvironmentId>,
+): EnvironmentId | null {
+  if (current !== null) return offering.includes(current) ? current : null;
+  return offering.length === 1 ? (offering[0] ?? null) : null;
 }
 
 export function inferProjectTitleFromPath(value: string): string {

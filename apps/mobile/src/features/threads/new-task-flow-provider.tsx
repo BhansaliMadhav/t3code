@@ -144,6 +144,12 @@ export function branchBadgeLabel(input: {
 type NewTaskFlowContextValue = {
   readonly projectScopes: ReadonlyArray<HomeProjectScope>;
   readonly selectedEnvironmentId: EnvironmentId | null;
+  /**
+   * The machine the user picked a project, draft, or environment on in this
+   * flow. Null on a fresh flow, where `selectedEnvironmentId` is only the
+   * first project's machine.
+   */
+  readonly chosenEnvironmentId: EnvironmentId | null;
   readonly selectedProjectKey: string | null;
   readonly selectedModelKey: string | null;
   readonly workspaceMode: WorkspaceMode;
@@ -253,11 +259,12 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
   const [selectedEnvironmentIdOverride, setSelectedEnvironmentId] = useState<EnvironmentId | null>(
     null,
   );
-  const selectedEnvironmentId =
+  const chosenEnvironmentId =
     selectedEnvironmentIdOverride !== null &&
     projects.some((project) => project.environmentId === selectedEnvironmentIdOverride)
       ? selectedEnvironmentIdOverride
-      : (projects[0]?.environmentId ?? null);
+      : null;
+  const selectedEnvironmentId = chosenEnvironmentId ?? projects[0]?.environmentId ?? null;
   const [selectedProjectKey, setSelectedProjectKey] = useState<string | null>(null);
   // The new-task draft the composer is bound to. Null until a project is
   // chosen; each New Task entry mints its own, so a project can hold several.
@@ -1167,6 +1174,7 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
     () => ({
       projectScopes,
       selectedEnvironmentId,
+      chosenEnvironmentId,
       selectedProjectKey,
       selectedModelKey,
       workspaceMode,
@@ -1254,6 +1262,7 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
       selectedBranchName,
       hasMoreBranches,
       selectedEnvironmentId,
+      chosenEnvironmentId,
       selectedModel,
       selectedModelKey,
       selectedModelOption,

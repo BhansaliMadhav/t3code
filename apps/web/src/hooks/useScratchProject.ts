@@ -1,4 +1,5 @@
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
+import { resolveScratchEnvironmentId } from "@t3tools/client-runtime/state/projects";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
@@ -46,17 +47,15 @@ export function useScratchProject() {
     [environments],
   );
 
-  // A thread without a project starts on the machine the user is working on,
-  // and only there. With no current machine (the hosted app with nothing
-  // open), it starts on the one machine that offers it, never a silent pick.
+  // The current machine is null on the hosted app with nothing open.
   const scratchEnvironmentId = useCallback(
-    (current: EnvironmentId | null): EnvironmentId | null => {
-      if (current !== null) return scratchWorkspaceRootFor(current) !== null ? current : null;
-      const offering = environments.filter(
-        (entry) => scratchWorkspaceRootFor(entry.environmentId) !== null,
-      );
-      return offering.length === 1 ? (offering[0]?.environmentId ?? null) : null;
-    },
+    (current: EnvironmentId | null): EnvironmentId | null =>
+      resolveScratchEnvironmentId(
+        current,
+        environments
+          .map((entry) => entry.environmentId)
+          .filter((environmentId) => scratchWorkspaceRootFor(environmentId) !== null),
+      ),
     [environments, scratchWorkspaceRootFor],
   );
 
