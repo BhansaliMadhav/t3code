@@ -7537,7 +7537,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
    * Ends the background work a settled thread still shows that no provider
    * process will report on: work on the provider thread whose interrupt just
    * returned (`stoppedProviderThreadId`), and work on provider threads with no
-   * live session at all. A dead process's roster goes too, as on restart.
+   * live session at all. Only the stopped run's work and older runs' is ended
+   * (`throughRunOrdinal`); a later run's work is its own. A dead process's
+   * roster goes too, as on restart.
    */
   const settleBackgroundWork = (input: {
     readonly command: Extract<
@@ -7550,10 +7552,12 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       "runs" | "turnItems" | "providerThreads"
     >;
     readonly stoppedProviderThreadId: OrchestrationV2ProviderThread["id"] | null;
+    readonly throughRunOrdinal: number;
     readonly now: DateTime.Utc;
   }) =>
     Effect.gen(function* () {
       const emitEvent = emit(input.events, input.command);
+      const runOrdinals = new Map(input.projection.runs.map((run) => [run.id, run.ordinal]));
       const liveness = new Map<string, boolean>();
       const hasLiveSession = (providerThreadId: OrchestrationV2ProviderThread["id"]) =>
         Effect.gen(function* () {
@@ -7577,6 +7581,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         turnItems: input.projection.turnItems,
         runs: input.projection.runs,
       })) {
+        // An item without a run counts as the stopped run's.
+        const itemRunOrdinal = item.runId === null ? undefined : runOrdinals.get(item.runId);
+        if (itemRunOrdinal !== undefined && itemRunOrdinal > input.throughRunOrdinal) continue;
         const providerThreadId = item.providerThreadId ?? null;
         if (
           providerThreadId !== null &&
@@ -7628,16 +7635,31 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     events: Ref.Ref<Array<OrchestrationV2DomainEvent>>,
   ) =>
     Effect.gen(function* () {
-      const projection = yield* projectionStore
-        .getThreadRecords(command.threadId, ["runs", "turnItems", "providerThreads"], {
-          turnItemTypes: ["command_execution", "dynamic_tool", "subagent"],
-          turnItemStatuses: ["pending", "running", "waiting"],
-        })
-        .pipe(
-          Effect.mapError(() => new OrchestratorProjectionError({ threadId: command.threadId })),
-        );
+      const [projection, stopped] = yield* Effect.all([
+        projectionStore.getThreadRecords(
+          command.threadId,
+          ["runs", "attempts", "turnItems", "providerThreads"],
+          {
+            turnItemTypes: ["command_execution", "dynamic_tool", "subagent"],
+            turnItemStatuses: ["pending", "running", "waiting"],
+          },
+        ),
+        projectionStore.getProviderControlContext(command.threadId, {
+          providerThreadId: command.providerThreadId,
+          providerTurnId: command.providerTurnId,
+        }),
+      ]).pipe(
+        Effect.mapError(
+          (cause) => new OrchestratorProjectionError({ threadId: command.threadId, cause }),
+        ),
+      );
+      const stoppedRunId = projection.attempts.find(
+        (attempt) => attempt.id === stopped.providerTurn?.runAttemptId,
+      )?.runId;
+      const stoppedRun = projection.runs.find((run) => run.id === stoppedRunId);
       // A new turn may have started since Stop; its work is not this Stop's.
       if (
+        stoppedRun === undefined ||
         projection.runs.some(
           (run) =>
             run.status === "preparing" || run.status === "starting" || run.status === "running",
@@ -7650,6 +7672,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         events,
         projection,
         stoppedProviderThreadId: command.providerThreadId,
+        throughRunOrdinal: stoppedRun.ordinal,
         now: yield* DateTime.now,
       });
     });
@@ -7920,6 +7943,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           events,
           projection,
           stoppedProviderThreadId: providerThread.id,
+          throughRunOrdinal: run.ordinal,
           now,
         });
         return undefined;
@@ -9357,7 +9381,31 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
     );
 
     if (plan.events.length === 0) {
-      return { sequence: 0, storedEvents: [] } satisfies OrchestratorV2DispatchResult;
+      // A settle that ended nothing still records its receipt: a replayed Stop
+      // effect then finds it instead of settling work that appeared since.
+      const resultSequence = yield* Effect.gen(function* () {
+        const sequence = yield* eventSink.latestSequence({ threadId: commandThreadId(command) });
+        yield* commandReceipts.insertIfAbsent({
+          commandId: command.commandId,
+          threadId: commandThreadId(command),
+          commandType: command.type,
+          acceptedAt: yield* DateTime.now,
+          resultSequence: sequence,
+          status: "accepted",
+          error: null,
+        });
+        return sequence;
+      }).pipe(
+        Effect.mapError(
+          (cause) =>
+            new OrchestratorDispatchError({
+              commandId: command.commandId,
+              commandType: command.type,
+              cause,
+            }),
+        ),
+      );
+      return { sequence: resultSequence, storedEvents: [] } satisfies OrchestratorV2DispatchResult;
     }
     const acceptedAt = plan.events.at(-1)?.occurredAt ?? (yield* DateTime.now);
     const committed = yield* eventSink

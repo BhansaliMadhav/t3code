@@ -175,6 +175,7 @@ export const executorLayer: Layer.Layer<
                     commandId: CommandId.make(`${effect.commandId}:background-work-settled`),
                     threadId: effect.threadId,
                     providerThreadId: effect.request.providerThreadId,
+                    providerTurnId: effect.request.providerTurnId,
                   }),
                 ),
                 Effect.mapError(
