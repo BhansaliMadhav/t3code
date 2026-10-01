@@ -974,6 +974,8 @@ function ThreadNavigationSidebarPane(
                   NATIVE_LIQUID_GLASS_SUPPORTED ? "automatic" : "never"
                 }
                 contentContainerStyle={[
+                  styles.threadListContent,
+                  Platform.OS === "android" ? { paddingHorizontal: 0 } : null,
                   {
                     paddingBottom: Math.max(insets.bottom, 16) + 16,
                     paddingTop: 6,
@@ -985,9 +987,7 @@ function ThreadNavigationSidebarPane(
                 recycleItems
                 scrollEventThrottle={16}
                 showsVerticalScrollIndicator={false}
-                // Inset the scroll view itself so absolute-positioned recycled
-                // rows and their swipe backgrounds stay inside the sidebar.
-                style={[styles.threadList, { marginHorizontal: 8 }]}
+                style={styles.threadList}
                 ListEmptyComponent={listEmpty}
               />
             </GestureDetector>
