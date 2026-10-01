@@ -159,7 +159,16 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
     : null;
   const screenTitle = incomingShare ? "Start a task" : "Choose project";
   const projectEmptyState = deriveProjectEmptyState(catalogState);
-  const visibleScopes = filterProjectScopes(projectScopes, searchText);
+  const serverConfigs = useServerConfigs();
+  // The Scratch project is reached through the No project entry, never as a
+  // project row of its own.
+  const listScopes = projectScopes.filter(
+    (scope) =>
+      !scope.projects.every((project) =>
+        isScratchProject(project, serverConfigs.get(project.environmentId)?.scratchWorkspaceRoot),
+      ),
+  );
+  const visibleScopes = filterProjectScopes(listScopes, searchText);
   const resumedDestinationKeyRef = useRef<string | null>(null);
   const reservedDestinationProject = incomingShare?.destination
     ? (projects.find(
@@ -168,7 +177,6 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
           project.id === incomingShare.destination?.projectId,
       ) ?? null)
     : null;
-  const serverConfigs = useServerConfigs();
   const { connectedEnvironments } = useRemoteConnectionStatus();
   const ensureScratch = useAtomCommand(projectEnvironment.ensureScratch, {
     reportFailure: false,
@@ -193,7 +201,6 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
         )
   ).map((environment) => {
     const machineLabel = connectedEnvironments.length > 1 ? environment.environmentLabel : null;
-    const scratchWorkspaceRoot = serverConfigs.get(environment.environmentId)?.scratchWorkspaceRoot;
     return {
       environmentId: environment.environmentId,
       startLabel: machineLabel
@@ -201,18 +208,9 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
         : "Start without a project",
       rowLabel: machineLabel ? `No project on ${machineLabel}` : "No project",
       rowSubtitle: machineLabel ? `On ${machineLabel}` : "Start a task without a project",
-      // Once the Scratch project exists it is an ordinary row in the list.
-      projectExists: projects.some(
-        (project) =>
-          project.environmentId === environment.environmentId &&
-          isScratchProject(project, scratchWorkspaceRoot),
-      ),
     };
   });
   const canStartScratch = reservedDestinationProject === null;
-  const scratchRowChoices = canStartScratch
-    ? scratchChoices.filter((choice) => !choice.projectExists)
-    : [];
   const scratchStartInFlightRef = useRef(false);
 
   async function selectProject(project: EnvironmentProject): Promise<void> {
@@ -333,7 +331,7 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
               : {}),
           }}
         >
-          {projectScopes.length === 0 ? (
+          {listScopes.length === 0 ? (
             <View
               collapsable={false}
               className={cn(
@@ -504,10 +502,10 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
               })}
             </View>
           )}
-          {scratchRowChoices.length > 0 && projectScopes.length > 0 ? (
+          {canStartScratch && scratchChoices.length > 0 && listScopes.length > 0 ? (
             Platform.OS === "android" ? (
               <View collapsable={false} className="overflow-hidden rounded-[28px] bg-card">
-                {scratchRowChoices.map((choice) => (
+                {scratchChoices.map((choice) => (
                   <MaterialListRow
                     key={choice.environmentId}
                     title="No project"
@@ -526,7 +524,7 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
               </View>
             ) : (
               <View collapsable={false} className="overflow-hidden rounded-[24px] bg-card">
-                {scratchRowChoices.map((choice, choiceIndex) => (
+                {scratchChoices.map((choice, choiceIndex) => (
                   <View
                     key={choice.environmentId}
                     className={cn(choiceIndex > 0 && "border-t border-border-subtle")}
