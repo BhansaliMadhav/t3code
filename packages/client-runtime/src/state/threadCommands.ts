@@ -263,6 +263,13 @@ export function createThreadEnvironmentAtoms<R, E>(
       scheduler,
       concurrency,
     }),
+    // Deletes an orchestrator worker's worktrees and workspace folder; branches stay.
+    removeWorkerWorkspace: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:commands:thread:remove-worker-workspace",
+      tag: WS_METHODS.orchestrationRemoveWorkerWorkspace,
+      scheduler,
+      concurrency,
+    }),
   };
   const optimistic = createOptimisticThreadLifecycle(snapshotAtom);
   return {

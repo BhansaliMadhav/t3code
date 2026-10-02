@@ -558,6 +558,9 @@ export function makeCursorAdapter(
             childProcessSpawner,
             cwd,
             runtimeMode: input.runtimeMode,
+            ...(input.extraWritableRoots?.length
+              ? { additionalDirectories: input.extraWritableRoots }
+              : {}),
             ...(resumeSessionId ? { resumeSessionId } : {}),
             clientInfo: { name: "t3-code", version: "0.0.0" },
             ...(mcpSession
@@ -1097,7 +1100,12 @@ export function makeCursorAdapter(
                     ...promptParts,
                     {
                       type: "text",
-                      text: buildRuntimeInstructions({ harness: "Cursor", model: resolvedModel }),
+                      text: buildRuntimeInstructions({
+                        harness: "Cursor",
+                        model: resolvedModel,
+                        capabilities: McpProviderSession.readMcpProviderSession(input.threadId)
+                          ?.capabilities,
+                      }),
                     },
                   ],
             })

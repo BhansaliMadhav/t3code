@@ -48,6 +48,7 @@ import * as EffectCodexSchema from "effect-codex-app-server/schema";
 import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
 import { getCodexServiceTierOptionValue } from "../../codexModelOptions.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
+import { ORCHESTRATOR_TOOL_NAMES } from "../../mcp/toolkits/orchestrator/tools.ts";
 
 import {
   ProviderAdapterRequestError,
@@ -2307,6 +2308,7 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
           threadId: input.threadId,
           providerInstanceId: boundInstanceId,
           cwd: input.cwd ?? process.cwd(),
+          ...(input.extraWritableRoots ? { extraWritableRoots: input.extraWritableRoots } : {}),
           ...(options?.models ? { models: options.models } : {}),
           binaryPath: effectiveConfig.binaryPath,
           launchArgs: resolveCodexLaunchArgs(effectiveConfig.launchArgs, effectiveEnvironment),
@@ -2334,6 +2336,12 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
                   `mcp_servers.t3-code.url=${mcpSession.endpoint}`,
                   "-c",
                   'mcp_servers.t3-code.bearer_token_env_var="T3_MCP_BEARER_TOKEN"',
+                  ...(mcpSession.capabilities.has("orchestrator")
+                    ? []
+                    : [
+                        "-c",
+                        `mcp_servers.t3-code.disabled_tools=[${ORCHESTRATOR_TOOL_NAMES.map((name) => `"${name}"`).join(",")}]`,
+                      ]),
                 ],
                 mcpCapabilities: mcpSession.capabilities,
               }

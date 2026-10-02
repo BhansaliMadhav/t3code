@@ -490,6 +490,7 @@ export function buildLocalDraftThread(
     latestTurn: null,
     branch: draftThread.branch,
     worktreePath: draftThread.worktreePath,
+    orchestration: draftThread.orchestrator ? { role: "orchestrator" } : null,
     checkpoints: [],
     pullRequests: [],
     activities: [],

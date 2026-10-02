@@ -295,6 +295,13 @@ export const DiffColorScheme = Schema.Literals(["red-green", "blue-orange"]);
 export const ChatWidth = Schema.Literals(["comfortable", "wide", "full"]);
 export type ChatWidth = typeof ChatWidth.Type;
 
+export const ChatMode = Schema.Literals(["normal", "orchestrator"]);
+export type ChatMode = typeof ChatMode.Type;
+
+/** Where an orchestrator's worker runs when the orchestrator does not say. */
+export const WorkerCheckoutMode = Schema.Literals(["new-worktree", "project-checkout"]);
+export type WorkerCheckoutMode = typeof WorkerCheckoutMode.Type;
+
 export const ClientSettingsSchema = Schema.Struct({
   notificationMode: NotificationMode.pipe(
     Schema.withDecodingDefault(Effect.succeed("off" as const)),
@@ -466,6 +473,10 @@ export const ClientSettingsSchema = Schema.Struct({
   sidebarWorkingShelfEnabled: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(false)),
   ),
+  // Which chat mode new drafts start in. Orchestrator chats get tools to
+  // spawn and follow worker threads; each draft can still switch before its
+  // first send.
+  defaultChatMode: ChatMode.pipe(Schema.withDecodingDefault(Effect.succeed("normal" as const))),
   sidebarProjectGroupingMode: SidebarProjectGroupingMode.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_SIDEBAR_PROJECT_GROUPING_MODE)),
   ),
@@ -1123,6 +1134,10 @@ export const ServerSettings = Schema.Struct({
   continueThreadsAfterServerUpdate: Schema.Boolean.pipe(
     Schema.withDecodingDefault(Effect.succeed(false)),
   ),
+  // Read by spawn_worker on the server, so every client agrees on it.
+  workerCheckoutDefault: WorkerCheckoutMode.pipe(
+    Schema.withDecodingDefault(Effect.succeed("new-worktree" as const)),
+  ),
   /**
    * Whether agents may drive the in-app preview browser. Turning this off
    * withholds the MCP credential, so the `t3-code` server (and with it every
@@ -1495,6 +1510,7 @@ export const ServerSettingsPatch = Schema.Struct({
     }),
   ),
   // Server settings
+  workerCheckoutDefault: Schema.optionalKey(WorkerCheckoutMode),
   responseStreamingMode: Schema.optionalKey(ResponseStreamingMode),
   enableProviderUpdateChecks: Schema.optionalKey(Schema.Boolean),
   continueThreadsAfterServerUpdate: Schema.optionalKey(Schema.Boolean),
@@ -1670,6 +1686,7 @@ export const ClientSettingsPatch = Schema.Struct({
   showSkillsInSlashMenu: Schema.optionalKey(Schema.Boolean),
   legacySidebarEnabled: Schema.optionalKey(Schema.Boolean),
   sidebarWorkingShelfEnabled: Schema.optionalKey(Schema.Boolean),
+  defaultChatMode: Schema.optionalKey(ChatMode),
   sidebarProjectGroupingMode: Schema.optionalKey(SidebarProjectGroupingMode),
   sidebarProjectGroupingOverrides: Schema.optionalKey(
     Schema.Record(TrimmedNonEmptyString, SidebarProjectGroupingMode),

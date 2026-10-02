@@ -1,6 +1,6 @@
 import { RefreshIcon } from "~/components/ui/refresh-icon";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { LinkIcon, PlusIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -13,6 +13,9 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "../components/
 import { SidebarInset } from "../components/ui/sidebar";
 import { WorkspacePageHeader } from "../components/WorkspacePageHeader";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
+import { useClientSettings } from "../hooks/useSettings";
+import { latestOrchestratorThread } from "../orchestratorChat";
+import { buildThreadRouteParams } from "../threadRoutes";
 import {
   useAllEnvironmentShellsBootstrapped,
   useProjects,
@@ -37,13 +40,17 @@ function ChatIndexRouteView() {
 /**
  * Landing on the index route drops straight into a draft thread for the most
  * recently active project, so the first screen is a prompt instead of a dead
- * end. Falls back to an add-project hero when no project exists yet.
+ * end. When orchestrator is the default chat mode it reopens the latest
+ * orchestrator chat instead, if there is one. Falls back to an add-project
+ * hero when no project exists yet.
  */
 function IndexDraftLanding() {
   const projects = useProjects();
   const threads = useThreadShells();
   const bootstrapped = useAllEnvironmentShellsBootstrapped();
   const handleNewThread = useNewThreadHandler();
+  const navigate = useNavigate();
+  const defaultChatMode = useClientSettings((settings) => settings.defaultChatMode);
   const startingRef = useRef(false);
   const [startState, setStartState] = useState({ failed: false, retryRequest: 0 });
 
@@ -60,13 +67,33 @@ function IndexDraftLanding() {
       return;
     }
     startingRef.current = true;
+    const orchestrator =
+      defaultChatMode === "orchestrator" ? latestOrchestratorThread(threads) : null;
+    if (orchestrator !== null) {
+      void navigate({
+        to: "/$environmentId/$threadId",
+        params: buildThreadRouteParams({
+          environmentId: orchestrator.environmentId,
+          threadId: orchestrator.id,
+        }),
+        replace: true,
+      });
+      return;
+    }
     void handleNewThread(scopeProjectRef(mostRecentProject.environmentId, mostRecentProject.id), {
       replace: true,
     }).catch(() => {
       startingRef.current = false;
       setStartState((state) => ({ ...state, failed: true }));
     });
-  }, [handleNewThread, mostRecentProject, startState.retryRequest]);
+  }, [
+    defaultChatMode,
+    handleNewThread,
+    mostRecentProject,
+    navigate,
+    startState.retryRequest,
+    threads,
+  ]);
 
   if (!bootstrapped) {
     return null;

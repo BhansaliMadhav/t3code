@@ -218,6 +218,7 @@ import { PullRequestDetailGhost } from "./pullRequest/PullRequestGhosts";
 import { PullRequestsUnavailableState } from "./pullRequest/PullRequestsUnavailableState";
 import { RightPanelTabs } from "./RightPanelTabs";
 import { AgentsPanel } from "./AgentsPanel";
+import { WorkersPanel } from "./WorkersPanel";
 import { LinkPullRequestDialogHost } from "./pullRequest/LinkPullRequestDialog";
 import { ThreadPullRequestsPanel } from "./pullRequest/ThreadPullRequestsPanel";
 import { useDeviceState } from "~/state/device";
@@ -4566,6 +4567,20 @@ export default function ChatView(props: ChatViewProps) {
     if (!activeThreadRef) return;
     useRightPanelStore.getState().open(activeThreadRef, "agents");
   }, [activeThreadRef]);
+  const isOrchestratorThread =
+    isServerThread && activeThread?.orchestration?.role === "orchestrator";
+  const addWorkersSurface = useCallback(() => {
+    if (!activeThreadRef) return;
+    useRightPanelStore.getState().open(activeThreadRef, "workers");
+  }, [activeThreadRef]);
+  // An orchestrator chat opens on its Workers panel the first time it is
+  // shown; after that the user's own panel choices stand.
+  useEffect(() => {
+    if (!isOrchestratorThread || !activeThreadRef) return;
+    const store = useRightPanelStore.getState();
+    const panel = selectThreadRightPanelState(store.byThreadKey, activeThreadRef);
+    if (panel.surfaces.length === 0) store.open(activeThreadRef, "workers");
+  }, [activeThreadRef, isOrchestratorThread]);
   const supportsThreadPullRequests =
     serverConfig?.environment.capabilities.threadPullRequests === true;
   const visiblePullRequests = visibleThreadPullRequests(
@@ -8013,6 +8028,9 @@ export default function ChatView(props: ChatViewProps) {
                       branch: activeThreadBranch,
                       worktreePath: null,
                       createdAt: messageCreatedAt,
+                      ...(activeThread.orchestration?.role === "orchestrator"
+                        ? { orchestration: { role: "orchestrator" as const } }
+                        : {}),
                     },
                     prepareWorktree: {
                       projectCwd: activeProject.workspaceRoot,
@@ -8348,6 +8366,9 @@ export default function ChatView(props: ChatViewProps) {
                       branch: activeThreadBranch,
                       worktreePath: activeThread.worktreePath,
                       createdAt: activeThread.createdAt,
+                      ...(activeThread.orchestration?.role === "orchestrator"
+                        ? { orchestration: { role: "orchestrator" as const } }
+                        : {}),
                     },
                   }
                 : {}),
@@ -9630,6 +9651,8 @@ export default function ChatView(props: ChatViewProps) {
       />
     ) : renderedRightPanelSurface?.kind === "pull-requests" && activeThreadRef ? (
       <ThreadPullRequestsPanel threadRef={activeThreadRef} />
+    ) : renderedRightPanelSurface?.kind === "workers" && activeThreadRef ? (
+      <WorkersPanel threadRef={activeThreadRef} />
     ) : renderedRightPanelSurface?.kind === "agents" ? (
       <AgentsPanel
         model={agentPanelModel}
@@ -9760,6 +9783,7 @@ export default function ChatView(props: ChatViewProps) {
             {...(routeKind === "draft" && draftId ? { draftId } : {})}
             activeThreadTitle={activeThread.title}
             isServerThread={isServerThread}
+            orchestration={activeThread.orchestration}
             activeProject={activeProject}
             openInCwd={gitCwd}
             activeProjectScripts={activeProjectScripts}
@@ -9991,6 +10015,9 @@ export default function ChatView(props: ChatViewProps) {
                             supportsMultipleModels={
                               serverConfig?.environment.capabilities.requiredWorktreeBootstrap ===
                               true
+                            }
+                            supportsOrchestratorChats={
+                              serverConfig?.environment.capabilities.orchestratorChats === true
                             }
                             onMultipleModelSelectionsChange={setMultipleModelSelections}
                             composerRef={composerRef}
@@ -10293,6 +10320,8 @@ export default function ChatView(props: ChatViewProps) {
           onAddPullRequests={addPullRequestsSurface}
           onAddAgents={addAgentsSurface}
           onAddDevice={addDeviceSurface}
+          onAddWorkers={addWorkersSurface}
+          workersAvailable={isOrchestratorThread}
           browserAvailable={isPreviewSupportedInRuntime()}
           terminalAvailable={activeProject !== null}
           diffAvailable={isServerThread && isGitRepo}
@@ -10350,6 +10379,8 @@ export default function ChatView(props: ChatViewProps) {
             onAddPullRequests={addPullRequestsSurface}
             onAddAgents={addAgentsSurface}
             onAddDevice={addDeviceSurface}
+            onAddWorkers={addWorkersSurface}
+            workersAvailable={isOrchestratorThread}
             browserAvailable={isPreviewSupportedInRuntime()}
             terminalAvailable={activeProject !== null}
             diffAvailable={isServerThread && isGitRepo}

@@ -1,4 +1,4 @@
-import { Outlet, createFileRoute, redirect, useParams } from "@tanstack/react-router";
+import { Outlet, createFileRoute, redirect, useNavigate, useParams } from "@tanstack/react-router";
 import { useAtomValue } from "@effect/atom-react";
 import { useEffect, useMemo } from "react";
 
@@ -16,6 +16,8 @@ import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { useScratchProject } from "../hooks/useScratchProject";
 import { startNewThreadFromContext } from "../lib/chatThreadActions";
 import { isPreviewFocused } from "../lib/previewFocus";
+import { readLatestOrchestratorThreadRef } from "../orchestratorChat";
+import { buildThreadRouteParams } from "../threadRoutes";
 import { isTerminalFocused } from "../lib/terminalFocus";
 import { isEditableFocused } from "../lib/editableFocus";
 import { isModelPickerOpen } from "../modelPickerVisibility";
@@ -39,6 +41,7 @@ function ChatRouteGlobalShortcuts() {
   const projects = useProjects();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const { scratchEnvironmentId, startScratchThread } = useScratchProject();
+  const navigate = useNavigate();
   const projectGroupCount = useMemo(
     () =>
       buildSidebarProjectSnapshots({
@@ -103,6 +106,33 @@ function ChatRouteGlobalShortcuts() {
           activeThread: activeThread ?? undefined,
           defaultProjectRef,
           handleNewThread,
+        });
+        return;
+      }
+
+      if (command === "chat.newOrchestrator") {
+        event.preventDefault();
+        event.stopPropagation();
+        void startNewThreadFromContext(
+          {
+            activeDraftThread,
+            activeThread: activeThread ?? undefined,
+            defaultProjectRef,
+            handleNewThread,
+          },
+          { orchestrator: true },
+        );
+        return;
+      }
+
+      if (command === "chat.goToOrchestrator") {
+        const orchestratorRef = readLatestOrchestratorThreadRef();
+        if (orchestratorRef === null) return;
+        event.preventDefault();
+        event.stopPropagation();
+        void navigate({
+          to: "/$environmentId/$threadId",
+          params: buildThreadRouteParams(orchestratorRef),
         });
         return;
       }
@@ -192,6 +222,7 @@ function ChatRouteGlobalShortcuts() {
     handleNewThread,
     keybindings,
     defaultProjectRef,
+    navigate,
     previewOpen,
     primaryEnvironmentId,
     projectGroupCount,

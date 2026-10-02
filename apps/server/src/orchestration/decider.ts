@@ -386,6 +386,19 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         threadId: command.threadId,
       });
+      if (command.orchestration?.role === "worker") {
+        const parent = yield* requireThread({
+          readModel,
+          command,
+          threadId: command.orchestration.parentThreadId,
+        });
+        if (parent.orchestration?.role !== "orchestrator") {
+          return yield* new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: `Thread '${parent.id}' is not an orchestrator, so it cannot own workers.`,
+          });
+        }
+      }
       return {
         ...(yield* withEventBase({
           aggregateKind: "thread",
@@ -404,6 +417,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           interactionMode: command.interactionMode,
           branch: command.branch,
           worktreePath: command.worktreePath,
+          ...(command.orchestration ? { orchestration: command.orchestration } : {}),
           createdAt: command.createdAt,
           updatedAt: command.createdAt,
         },
