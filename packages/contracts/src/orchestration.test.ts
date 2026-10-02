@@ -1688,3 +1688,45 @@ it.effect("encodes compatible icons inside snapshots and client commands", () =>
     assert.deepEqual(yield* decodeNightlyIcon(command.projectIcon), fallback);
   }),
 );
+
+it.effect("only the server may create orchestrator worker threads", () =>
+  Effect.gen(function* () {
+    const create = {
+      type: "thread.create",
+      commandId: "cmd-worker",
+      threadId: "thread-worker",
+      projectId: "project-1",
+      title: "Worker",
+      modelSelection: { instanceId: "codex", model: "gpt-5.4" },
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      branch: null,
+      worktreePath: "/anywhere",
+      createdAt: "2026-01-01T00:00:00.000Z",
+    };
+    const worker = {
+      role: "worker",
+      parentThreadId: "thread-orchestrator",
+      workspacePath: "/home/user",
+      repos: [],
+    };
+    assert.ok(
+      yield* decodeClientOrchestrationCommand({ ...create, orchestration: worker }).pipe(
+        Effect.flip,
+      ),
+    );
+    const orchestrator = yield* decodeClientOrchestrationCommand({
+      ...create,
+      orchestration: { role: "orchestrator" },
+    });
+    assert.deepStrictEqual(
+      orchestrator.type === "thread.create" ? orchestrator.orchestration : null,
+      { role: "orchestrator" },
+    );
+    const server = yield* decodeOrchestrationCommand({ ...create, orchestration: worker });
+    assert.strictEqual(
+      server.type === "thread.create" ? server.orchestration?.role : null,
+      "worker",
+    );
+  }),
+);

@@ -10,6 +10,7 @@ import { Argument, Command, Flag } from "effect/unstable/cli";
 import {
   resolveWebAssetBrandForChannel,
   resolveWebIconOverrides,
+  WEB_ASSET_BRAND_APP_NAMES,
   WEB_ASSET_CHANNELS,
   type WebAssetBrand,
 } from "./lib/brand-assets.ts";
@@ -37,6 +38,14 @@ export const applyWebBrandAssets = Effect.fn("applyWebBrandAssets")(function* (
       ),
     { concurrency: "unbounded" },
   );
+
+  // The page title, splash label, and application-name meta that the client reads at boot.
+  const appName = WEB_ASSET_BRAND_APP_NAMES[brand];
+  if (appName !== undefined) {
+    const indexPath = path.join(repoRoot, targetDirectory, "index.html");
+    const indexHtml = yield* fs.readFileString(indexPath);
+    yield* fs.writeFileString(indexPath, indexHtml.replaceAll("T3 Code", appName));
+  }
 });
 
 export const applyWebBrandAssetsCommand = Command.make(

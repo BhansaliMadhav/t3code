@@ -1,5 +1,6 @@
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import type {
+  ChatMode,
   EnvironmentId,
   ModelSelection,
   ProjectId,
@@ -25,6 +26,7 @@ interface NewThreadHandler {
       worktreePath?: string | null;
       envMode?: DraftThreadEnvMode;
       startFromOrigin?: boolean;
+      orchestrator?: boolean;
     },
     // The opened draft's identity, which most callers have no use for.
   ): Promise<unknown>;
@@ -35,6 +37,25 @@ export interface ChatThreadActionContext {
   readonly activeThread: ThreadContextLike | undefined;
   readonly defaultProjectRef: ScopedProjectRef | null;
   readonly handleNewThread: NewThreadHandler;
+}
+
+/**
+ * Whether a new draft starts as an orchestrator chat. An explicit request
+ * wins; otherwise the mode carries from the thread being viewed, like the
+ * model does. Workers and fresh windows fall back to the default setting.
+ */
+export function resolveNewDraftOrchestrator(input: {
+  supported: boolean;
+  explicit: boolean | undefined;
+  carrySource: "orchestrator" | "worker" | "normal" | null;
+  defaultChatMode: ChatMode;
+}): boolean {
+  if (!input.supported) return false;
+  if (input.explicit !== undefined) return input.explicit;
+  if (input.carrySource === "orchestrator" || input.carrySource === "normal") {
+    return input.carrySource === "orchestrator";
+  }
+  return input.defaultChatMode === "orchestrator";
 }
 
 export function resolveNewDraftStartFromOrigin(input: {
@@ -91,12 +112,17 @@ export function resolveThreadActionProjectRef(
 // directly instead.
 export async function startNewThreadFromContext(
   context: ChatThreadActionContext,
+  options?: { readonly orchestrator?: boolean },
 ): Promise<boolean> {
   const projectRef = resolveThreadActionProjectRef(context);
   if (!projectRef) {
     return false;
   }
 
-  await context.handleNewThread(projectRef);
+  if (options?.orchestrator === undefined) {
+    await context.handleNewThread(projectRef);
+  } else {
+    await context.handleNewThread(projectRef, { orchestrator: options.orchestrator });
+  }
   return true;
 }

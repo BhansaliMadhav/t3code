@@ -177,6 +177,21 @@ describe("buildTurnStartParams", () => {
     }),
   );
 
+  it.effect("lets workspace-write turns write a worker's main-repo .git folders", () =>
+    Effect.gen(function* () {
+      const params = yield* buildTurnStartParams({
+        threadId: "provider-thread-1",
+        runtimeMode: "auto-accept-edits",
+        prompt: "Commit",
+        extraWritableRoots: ["/repos/a/.git", "/repos/b/.git"],
+      });
+      NodeAssert.deepStrictEqual(params.sandboxPolicy, {
+        type: "workspaceWrite",
+        writableRoots: ["/repos/a/.git", "/repos/b/.git"],
+      });
+    }),
+  );
+
   it("keeps invalid turn values only in the schema cause", () => {
     const secret = "codex-turn-input-secret-sentinel";
     const error = Effect.runSync(

@@ -26,6 +26,7 @@ import {
   TerminalSquare,
   Volume2,
   VolumeOff,
+  Workflow,
 } from "lucide-react";
 import {
   type KeyboardEvent as ReactKeyboardEvent,
@@ -78,6 +79,7 @@ import { previewBridge } from "./preview/previewBridge";
 import { PierreEntryIcon } from "./chat/PierreEntryIcon";
 import { resolvePullRequestState } from "./pullRequest/pullRequestPresentation";
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
+import { APP_BASE_NAME } from "~/branding";
 
 interface RightPanelTabsProps {
   mode: PreviewPanelMode;
@@ -123,6 +125,9 @@ interface RightPanelTabsProps {
   onAddPullRequests: () => void;
   onAddAgents: () => void;
   onAddDevice: () => void;
+  /** Orchestrator chats only; other chats never list Workers. */
+  onAddWorkers?: (() => void) | undefined;
+  workersAvailable?: boolean | undefined;
   browserAvailable: boolean;
   terminalAvailable: boolean;
   diffAvailable: boolean;
@@ -154,7 +159,7 @@ export function shouldOpenDefaultBrowserProfileFromMenuClick(
 }
 
 const SURFACE_DISABLED_REASONS = {
-  browser: "Browser previews are only available in the T3 Code desktop app.",
+  browser: `Browser previews are only available in the ${APP_BASE_NAME} desktop app.`,
   terminal: "Terminal surfaces are only available from a project thread.",
   files: "Files are only available when a project is open.",
   diff: "Diff is only available for server threads in Git repositories.",
@@ -186,6 +191,7 @@ const SURFACE_UNAVAILABLE_HINTS = {
   pullRequests: "No linked pull requests available.",
   agents: "Available from a thread.",
   device: "Available from a thread.",
+  workers: "Available in orchestrator chats.",
 } as const;
 
 type TabContextMenuAction =
@@ -326,6 +332,9 @@ function RightPanelEmptyState(props: {
   onAddPullRequests: () => void;
   onAddAgents: () => void;
   onAddDevice: () => void;
+  /** Orchestrator chats only; other chats never list Workers. */
+  onAddWorkers?: (() => void) | undefined;
+  workersAvailable?: boolean | undefined;
   browserAvailable: boolean;
   terminalAvailable: boolean;
   diffAvailable: boolean;
@@ -413,11 +422,22 @@ function RightPanelEmptyState(props: {
       onClick: props.onAddDevice,
       badgeCount: 0,
     },
+    {
+      label: "Workers",
+      description: "Follow and answer this chat's worker threads.",
+      icon: Workflow,
+      shortcut: "W",
+      available: props.workersAvailable === true,
+      disabledReason: SURFACE_UNAVAILABLE_HINTS.workers,
+      onClick: props.onAddWorkers ?? (() => {}),
+      badgeCount: 0,
+    },
   ] as const;
 
   type SurfaceAction = (typeof actions)[number];
 
-  const availableActions = actions.filter((action) => action.available);
+  const listedActions = actions.filter((action) => action.label !== "Workers" || action.available);
+  const availableActions = listedActions.filter((action) => action.available);
   const highlightIndex =
     availableActions.length === 0 ? -1 : Math.min(highlight, availableActions.length - 1);
 
@@ -514,7 +534,7 @@ function RightPanelEmptyState(props: {
       <div className="w-full max-w-xs py-6">
         <h3 className="mb-3 text-center font-medium text-foreground text-sm">Open a surface</h3>
         <div className="flex flex-col gap-0.5">
-          {actions.map((action) =>
+          {listedActions.map((action) =>
             action.available ? (
               // The row is itself a button, so the profile chooser sits beside
               // it in a wrapper rather than inside it. Hover lives on the
@@ -630,6 +650,8 @@ function surfaceTitle(
       return "Pull requests";
     case "agents":
       return "Agents";
+    case "workers":
+      return "Workers";
     case "device":
       return surface.title ?? surface.target?.name ?? "Device";
     case "preview": {
@@ -715,6 +737,8 @@ function SurfaceIcon({
       return <PullRequestGlyph.link className="size-3 shrink-0" />;
     case "agents":
       return <Bot className="size-3 shrink-0" />;
+    case "workers":
+      return <Workflow className="size-3 shrink-0" />;
     case "device":
       return surface.target?.platform === "ios" ? (
         <AppleIcon className="size-3 shrink-0" />
@@ -1425,6 +1449,8 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
             agentsAvailable={props.agentsAvailable}
             deviceAvailable={props.deviceAvailable}
             liveAgentCount={props.liveAgentCount}
+            onAddWorkers={props.onAddWorkers}
+            workersAvailable={props.workersAvailable}
           />
         ) : (
           props.children

@@ -9,11 +9,19 @@ function normalizeWorktreePath(path: string | null): string | null {
 }
 
 export function getOrphanedWorktreePathForThread(
-  threads: ReadonlyArray<Pick<ThreadShell, "id" | "worktreePath">>,
+  threads: ReadonlyArray<Pick<ThreadShell, "id" | "worktreePath" | "orchestration">>,
   threadId: ThreadShell["id"],
 ): string | null {
   const targetThread = threads.find((thread) => thread.id === threadId);
   if (!targetThread) {
+    return null;
+  }
+  // A multi-repo worker runs in a plain folder of worktrees, not a worktree;
+  // it is removed from the Workers panel instead.
+  if (
+    targetThread.orchestration?.role === "worker" &&
+    targetThread.orchestration.workspacePath !== null
+  ) {
     return null;
   }
 

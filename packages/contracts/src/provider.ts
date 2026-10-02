@@ -63,6 +63,9 @@ export const ProviderSessionStartInput = Schema.Struct({
   approvalPolicy: Schema.optional(ProviderApprovalPolicy),
   sandboxMode: Schema.optional(ProviderSandboxMode),
   runtimeMode: RuntimeMode,
+  // Folders outside cwd the agent may write, such as the main repo's .git
+  // directory behind an orchestrator worker's worktrees.
+  extraWritableRoots: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
 });
 export type ProviderSessionStartInput = typeof ProviderSessionStartInput.Type;
 

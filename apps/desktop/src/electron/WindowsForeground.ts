@@ -1,3 +1,4 @@
+import { DESKTOP_VARIANT } from "../app/DesktopVariant.ts";
 export interface WindowsForegroundApi {
   readonly getCurrentThreadId: () => number;
   readonly getForegroundWindow: () => bigint;
@@ -216,7 +217,7 @@ export function loadWindowsForegroundApi(): Promise<WindowsForegroundApi> {
 export async function activateWindowsForeground(handleBuffer: Buffer): Promise<void> {
   const api = await loadWindowsForegroundApi();
   if (activateWindowsForegroundWithApi(handleBuffer, api)) return;
-  throw new Error("Windows refused to activate the T3 Code window.");
+  throw new Error(`Windows refused to activate the ${DESKTOP_VARIANT.baseName} window.`);
 }
 
 export async function isWindowsShellHostedForeground(): Promise<boolean> {

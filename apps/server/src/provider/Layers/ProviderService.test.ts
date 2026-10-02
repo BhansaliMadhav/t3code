@@ -11,6 +11,7 @@ import type {
   ProviderTurnStartResult,
   ProviderUploadFeedbackInput,
   ProviderUploadFeedbackResult,
+  ThreadOrchestration,
 } from "@t3tools/contracts";
 import {
   ASSISTANT_CITATION_MAX_TEXT_LENGTH,
@@ -5067,7 +5068,10 @@ describe("agent browser access", () => {
     access: boolean | { readonly browser: boolean; readonly device: boolean },
     threadId: ThreadId,
     projectOverride?: boolean | { readonly browser?: boolean; readonly device?: boolean },
-    options?: { readonly withoutOrchestration?: boolean },
+    options?: {
+      readonly withoutOrchestration?: boolean;
+      readonly orchestration?: ThreadOrchestration;
+    },
   ) =>
     Effect.gen(function* () {
       const enableAgentBrowserAccess = typeof access === "boolean" ? access : access.browser;
@@ -5125,6 +5129,7 @@ describe("agent browser access", () => {
                 hasPendingApprovals: false,
                 hasPendingUserInput: false,
                 hasActionableProposedPlan: false,
+                ...(options?.orchestration ? { orchestration: options.orchestration } : {}),
               }),
             );
           }).pipe(Effect.orDie),
@@ -5255,6 +5260,29 @@ describe("agent browser access", () => {
         device: true,
       });
       assert.deepEqual(issued, [{ threadId, capabilities: ["device", "pull-requests"] }]);
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("grants the orchestrator toolkit only to orchestrator chats", () =>
+    Effect.gen(function* () {
+      const orchestratorId = asThreadId("thread-orchestrator");
+      const orchestratorIssued = yield* startSessionWith(false, orchestratorId, undefined, {
+        orchestration: { role: "orchestrator" },
+      });
+      assert.deepEqual(orchestratorIssued, [
+        { threadId: orchestratorId, capabilities: ["orchestrator", "pull-requests"] },
+      ]);
+
+      const workerId = asThreadId("thread-worker");
+      const workerIssued = yield* startSessionWith(false, workerId, undefined, {
+        orchestration: {
+          role: "worker",
+          parentThreadId: orchestratorId,
+          workspacePath: null,
+          repos: [],
+        },
+      });
+      assert.deepEqual(workerIssued, [{ threadId: workerId, capabilities: ["pull-requests"] }]);
     }).pipe(Effect.provide(NodeServices.layer)),
   );
 

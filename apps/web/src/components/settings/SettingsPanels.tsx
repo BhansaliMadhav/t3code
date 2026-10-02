@@ -49,7 +49,12 @@ import { createModelSelection } from "@t3tools/shared/model";
 import * as Duration from "effect/Duration";
 import * as Equal from "effect/Equal";
 import * as Schema from "effect/Schema";
-import { APP_VERSION, HOSTED_APP_CHANNEL, HOSTED_APP_CHANNEL_LABEL } from "../../branding";
+import {
+  APP_BASE_NAME,
+  APP_VERSION,
+  HOSTED_APP_CHANNEL,
+  HOSTED_APP_CHANNEL_LABEL,
+} from "../../branding";
 import {
   canCheckForUpdate,
   getDesktopUpdateButtonTooltip,
@@ -567,6 +572,12 @@ export function useSettingsRestore(onRestored?: () => void) {
       DEFAULT_UNIFIED_SETTINGS.sidebarWorkingShelfEnabled
         ? ["Working section"]
         : []),
+      ...(settings.defaultChatMode !== DEFAULT_UNIFIED_SETTINGS.defaultChatMode
+        ? ["Default chat mode"]
+        : []),
+      ...(settings.workerCheckoutDefault !== DEFAULT_UNIFIED_SETTINGS.workerCheckoutDefault
+        ? ["Where workers run"]
+        : []),
       ...(settings.sidebarAutoSettleAfterDays !==
       DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleAfterDays
         ? ["Auto-settle inactive threads"]
@@ -689,6 +700,8 @@ export function useSettingsRestore(onRestored?: () => void) {
       settings.sidebarAutoSettleOnMerge,
       settings.sidebarProjectGroupingMode,
       settings.sidebarWorkingShelfEnabled,
+      settings.defaultChatMode,
+      settings.workerCheckoutDefault,
       settings.sidebarThreadPreviewCount,
       settings.showSkillsInSlashMenu,
       settings.timestampFormat,
@@ -787,6 +800,8 @@ export function useSettingsRestore(onRestored?: () => void) {
       sidebarThreadPreviewCount: DEFAULT_UNIFIED_SETTINGS.sidebarThreadPreviewCount,
       sidebarProjectGroupingMode: DEFAULT_UNIFIED_SETTINGS.sidebarProjectGroupingMode,
       sidebarWorkingShelfEnabled: DEFAULT_UNIFIED_SETTINGS.sidebarWorkingShelfEnabled,
+      defaultChatMode: DEFAULT_UNIFIED_SETTINGS.defaultChatMode,
+      workerCheckoutDefault: DEFAULT_UNIFIED_SETTINGS.workerCheckoutDefault,
       sidebarAutoSettleAfterDays: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleAfterDays,
       sidebarAutoSettleOnMerge: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleOnMerge,
       responseStreamingMode: DEFAULT_UNIFIED_SETTINGS.responseStreamingMode,
@@ -2276,6 +2291,88 @@ export function GeneralSettingsPanel() {
         />
 
         <SettingsRow
+          {...searchableSetting("default-chat-mode")}
+          description="Orchestrator chats plan the work, start worker threads in their own worktrees, and bring workers' questions to you. Each new chat can still switch before its first message."
+          resetAction={
+            settings.defaultChatMode !== DEFAULT_UNIFIED_SETTINGS.defaultChatMode ? (
+              <SettingResetButton
+                label="default chat mode"
+                onClick={() =>
+                  updateSettings({ defaultChatMode: DEFAULT_UNIFIED_SETTINGS.defaultChatMode })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Select
+              value={settings.defaultChatMode}
+              onValueChange={(value) => {
+                if (value === "normal" || value === "orchestrator") {
+                  updateSettings({ defaultChatMode: value });
+                }
+              }}
+            >
+              <SelectTrigger size="sm" className="w-full sm:w-40" aria-label="Default chat mode">
+                <SelectValue>
+                  {settings.defaultChatMode === "orchestrator" ? "Orchestrator" : "Normal"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectPopup align="end" alignItemWithTrigger={false}>
+                <SelectItem hideIndicator value="normal">
+                  Normal
+                </SelectItem>
+                <SelectItem hideIndicator value="orchestrator">
+                  Orchestrator
+                </SelectItem>
+              </SelectPopup>
+            </Select>
+          }
+        />
+
+        <SettingsRow
+          {...searchableSetting("worker-checkout")}
+          description="Where an orchestrator's workers run unless you ask it for something else. The project checkout is shared with you and other workers; T3 Code never deletes it."
+          resetAction={
+            settings.workerCheckoutDefault !== DEFAULT_UNIFIED_SETTINGS.workerCheckoutDefault ? (
+              <SettingResetButton
+                label="where workers run"
+                onClick={() =>
+                  updateSettings({
+                    workerCheckoutDefault: DEFAULT_UNIFIED_SETTINGS.workerCheckoutDefault,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Select
+              value={settings.workerCheckoutDefault}
+              onValueChange={(value) => {
+                if (value === "new-worktree" || value === "project-checkout") {
+                  updateSettings({ workerCheckoutDefault: value });
+                }
+              }}
+            >
+              <SelectTrigger size="sm" className="w-full sm:w-40" aria-label="Where workers run">
+                <SelectValue>
+                  {settings.workerCheckoutDefault === "project-checkout"
+                    ? "Project checkout"
+                    : "New worktree"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectPopup align="end" alignItemWithTrigger={false}>
+                <SelectItem hideIndicator value="new-worktree">
+                  New worktree
+                </SelectItem>
+                <SelectItem hideIndicator value="project-checkout">
+                  Project checkout
+                </SelectItem>
+              </SelectPopup>
+            </Select>
+          }
+        />
+
+        <SettingsRow
           {...searchableSetting("working-shelf")}
           description="Fold working and monitoring threads into a Working section. They return to the top of the inbox when they need you."
           resetAction={
@@ -3294,7 +3391,7 @@ export function GeneralSettingsPanel() {
         />
         <SettingsRow
           {...searchableSetting("open-source-licenses")}
-          description="Notices for dependencies, assets, and optional tools used by T3 Code."
+          description={`Notices for dependencies, assets, and optional tools used by ${APP_BASE_NAME}.`}
           control={
             <Button
               render={<Link to="/settings/open-source-licenses" />}

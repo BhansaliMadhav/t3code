@@ -936,8 +936,38 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     const access = yield* agentAccessSettings(threadId);
     if (access.browser) capabilities.add("preview");
     if (access.device) capabilities.add("device");
+    // Orchestrator chats drive worker threads. Workers and normal chats never get this.
+    if (Option.isSome(projectionQuery)) {
+      const thread = yield* projectionQuery.value
+        .getThreadShellById(threadId)
+        .pipe(Effect.orElseSucceed(() => Option.none()));
+      if (Option.isSome(thread) && thread.value.orchestration?.role === "orchestrator") {
+        capabilities.add("orchestrator");
+      }
+    }
     return capabilities;
   });
+
+  /**
+   * A worker's worktree commits land in its main repo's .git, outside the
+   * worker's cwd, so sandboxed providers must be allowed to write there.
+   */
+  const workerWritableRoots = (threadId: ThreadId) =>
+    Option.isNone(projectionQuery)
+      ? Effect.succeed<ReadonlyArray<string>>([])
+      : projectionQuery.value.getThreadShellById(threadId).pipe(
+          Effect.map((thread) => {
+            const orchestration = Option.getOrUndefined(thread)?.orchestration;
+            return orchestration?.role === "worker"
+              ? orchestration.repos.map((repo) => pathService.join(repo.repoRoot, ".git"))
+              : [];
+          }),
+          Effect.orElseSucceed((): ReadonlyArray<string> => []),
+        );
+  const withWorkerWritableRoots = <A extends { readonly threadId: ThreadId }>(input: A) =>
+    workerWritableRoots(input.threadId).pipe(
+      Effect.map((roots) => (roots.length > 0 ? { ...input, extraWritableRoots: roots } : input)),
+    );
 
   /** Install only the local CLI here. device_open supplies a separate config for each host. */
   const hostPlatform = yield* HostProcessPlatform;
@@ -1297,15 +1327,17 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
 
       yield* prepareMcpSession(input.binding.threadId, bindingInstanceId);
       const resumed = yield* adapter
-        .startSession({
-          threadId: input.binding.threadId,
-          provider: input.binding.provider,
-          providerInstanceId: bindingInstanceId,
-          ...(persistedCwd ? { cwd: persistedCwd } : {}),
-          ...(persistedModelSelection ? { modelSelection: persistedModelSelection } : {}),
-          ...(hasResumeCursor ? { resumeCursor: input.binding.resumeCursor } : {}),
-          runtimeMode: input.binding.runtimeMode ?? "full-access",
-        })
+        .startSession(
+          yield* withWorkerWritableRoots({
+            threadId: input.binding.threadId,
+            provider: input.binding.provider,
+            providerInstanceId: bindingInstanceId,
+            ...(persistedCwd ? { cwd: persistedCwd } : {}),
+            ...(persistedModelSelection ? { modelSelection: persistedModelSelection } : {}),
+            ...(hasResumeCursor ? { resumeCursor: input.binding.resumeCursor } : {}),
+            runtimeMode: input.binding.runtimeMode ?? "full-access",
+          }),
+        )
         .pipe(Effect.onError(() => clearMcpSession(input.binding.threadId)));
       if (resumed.provider !== adapter.provider) {
         yield* clearMcpSession(input.binding.threadId);
@@ -1528,12 +1560,16 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         yield* clearTurnAnalyticsSession(resolvedInstanceId, threadId);
         yield* prepareMcpSession(threadId, resolvedInstanceId);
         const session = yield* adapter
-          .startSession({
-            ...input,
-            providerInstanceId: resolvedInstanceId,
-            ...(effectiveCwd !== undefined ? { cwd: effectiveCwd } : {}),
-            ...(effectiveResumeCursor !== undefined ? { resumeCursor: effectiveResumeCursor } : {}),
-          })
+          .startSession(
+            yield* withWorkerWritableRoots({
+              ...input,
+              providerInstanceId: resolvedInstanceId,
+              ...(effectiveCwd !== undefined ? { cwd: effectiveCwd } : {}),
+              ...(effectiveResumeCursor !== undefined
+                ? { resumeCursor: effectiveResumeCursor }
+                : {}),
+            }),
+          )
           .pipe(Effect.onError(() => clearMcpSession(threadId)));
 
         if (session.provider !== adapter.provider) {

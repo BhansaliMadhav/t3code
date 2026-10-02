@@ -55,6 +55,16 @@ import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 const LINUX_ICON_SIZES = [16, 22, 24, 32, 48, 64, 128, 256, 512] as const;
 const DESKTOP_APP_ID = "com.t3tools.t3code";
+
+/**
+ * T3CODE_DESKTOP_VARIANT=mcode packages M Code: an experimental build that
+ * installs beside T3 Code with its own name, app id, icons, and data
+ * directory (see apps/desktop/src/app/DesktopVariant.ts), no update feed, and
+ * no claim on the t3code:// scheme.
+ */
+const DESKTOP_BUILD_VARIANT: "t3code" | "mcode" =
+  process.env.T3CODE_DESKTOP_VARIANT?.trim() === "mcode" ? "mcode" : "t3code";
+const MCODE_APP_ID = "dev.mcode.mcode";
 const APPLE_TEAM_ID_PATTERN = /^[A-Z0-9]{10}$/u;
 
 const BuildPlatform = Schema.Literals(["mac", "linux", "win"]);
@@ -2577,10 +2587,18 @@ export function isDesktopPreviewVersion(version: string): boolean {
 }
 
 export function resolveDesktopWebAssetBrand(version: string): WebAssetBrand {
+  if (DESKTOP_BUILD_VARIANT === "mcode") return "mcode";
   return resolveWebAssetBrandForChannel(resolveDesktopUpdateChannel(version));
 }
 
 export function resolveDesktopBuildIconAssets(version: string): DesktopBuildIconAssets {
+  if (DESKTOP_BUILD_VARIANT === "mcode") {
+    return {
+      macIconPng: BRAND_ASSET_PATHS.mcodeUniversalIconPng,
+      linuxIconPng: BRAND_ASSET_PATHS.mcodeUniversalIconPng,
+      windowsIconIco: BRAND_ASSET_PATHS.mcodeWindowsIconIco,
+    };
+  }
   if (resolveDesktopUpdateChannel(version) === "nightly") {
     return {
       macIconPng: BRAND_ASSET_PATHS.nightlyMacIconPng,
@@ -2613,7 +2631,13 @@ export function resolvePackageManagerUserAgent(packageManager: string): string {
   return `${trimmed.slice(0, versionSeparator)}/${trimmed.slice(versionSeparator + 1)}`;
 }
 
+/** The product name without a channel suffix, for user-facing copy baked into the package. */
+function resolveDesktopBaseName(): string {
+  return DESKTOP_BUILD_VARIANT === "mcode" ? "M Code" : "T3 Code";
+}
+
 export function resolveDesktopProductName(version: string): string {
+  if (DESKTOP_BUILD_VARIANT === "mcode") return resolveDesktopBaseName();
   return resolveDesktopUpdateChannel(version) === "nightly"
     ? "T3 Code (Nightly)"
     : (desktopPackageJson.productName ?? "T3 Code");
@@ -2639,9 +2663,12 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   arch?: typeof BuildArch.Type,
 ) {
   const buildConfig: Record<string, unknown> = {
-    appId: DESKTOP_APP_ID,
+    appId: DESKTOP_BUILD_VARIANT === "mcode" ? MCODE_APP_ID : DESKTOP_APP_ID,
     productName: resolveDesktopProductName(version),
-    artifactName: "T3-Code-${version}-${arch}.${ext}",
+    artifactName:
+      DESKTOP_BUILD_VARIANT === "mcode"
+        ? "M-Code-${version}-${arch}.${ext}"
+        : "T3-Code-${version}-${arch}.${ext}",
     electronLanguages: [...DESKTOP_ELECTRON_LANGUAGES],
     files: [
       ...DESKTOP_FILE_EXCLUSIONS,
@@ -2669,7 +2696,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     ],
   };
   const updateChannel = resolveDesktopUpdateChannel(version);
-  if (!isDesktopPreviewVersion(version)) {
+  if (!isDesktopPreviewVersion(version) && DESKTOP_BUILD_VARIANT !== "mcode") {
     const publishConfig = yield* resolveGitHubPublishConfig(updateChannel);
     if (publishConfig) {
       buildConfig.publish = [publishConfig];
@@ -2691,15 +2718,18 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       icon: "icon.icns",
       category: "public.app-category.developer-tools",
       extendInfo: {
-        NSScreenCaptureUsageDescription:
-          "T3 Code captures the active window when you use the window capture shortcut.",
+        NSScreenCaptureUsageDescription: `${resolveDesktopBaseName()} captures the active window when you use the window capture shortcut.`,
       },
-      protocols: [
-        {
-          name: "T3 Code",
-          schemes: ["t3code", "t3code-dev"],
-        },
-      ],
+      ...(DESKTOP_BUILD_VARIANT === "mcode"
+        ? {}
+        : {
+            protocols: [
+              {
+                name: "T3 Code",
+                schemes: ["t3code", "t3code-dev"],
+              },
+            ],
+          }),
       ...(signed ? { sign: path.join(repoRoot, "scripts/sign-macos.ts") } : {}),
       ...(macPasskeySigning
         ? {
@@ -2739,28 +2769,37 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       // resources/package-type into the .deb only, so electron-updater updates
       // each install in its own format.
       target: target === "AppImage" ? [target, "deb"] : [target],
-      executableName: "t3code",
+      executableName: DESKTOP_BUILD_VARIANT === "mcode" ? "mcode" : "t3code",
       icon: "icons",
       category: "Development",
       synopsis: "Desktop GUI for coding agents",
       // Required by the .deb control file.
-      maintainer: "T3 Tools <hello@t3.codes>",
+      maintainer:
+        DESKTOP_BUILD_VARIANT === "mcode"
+          ? "M Code (unofficial T3 Code build) <noreply@localhost>"
+          : "T3 Tools <hello@t3.codes>",
       // electron-builder turns these into MimeType=x-scheme-handler/<scheme>;
       // in the .desktop entry (Exec already gets %U), so browsers can hand
       // t3code:// OAuth callbacks to the app.
-      protocols: [
-        {
-          name: "T3 Code",
-          schemes: ["t3code", "t3code-dev"],
-        },
-      ],
+      ...(DESKTOP_BUILD_VARIANT === "mcode"
+        ? {}
+        : {
+            protocols: [
+              {
+                name: "T3 Code",
+                schemes: ["t3code", "t3code-dev"],
+              },
+            ],
+          }),
       desktop: {
         entry: {
-          StartupWMClass: "t3code",
+          StartupWMClass: DESKTOP_BUILD_VARIANT === "mcode" ? "mcode" : "t3code",
         },
       },
     };
     buildConfig.deb = {
+      // A distinct package name, so installing M Code never replaces T3 Code.
+      ...(DESKTOP_BUILD_VARIANT === "mcode" ? { packageName: "mcode" } : {}),
       // Electron's runtime libraries. Debian 13 and Ubuntu 24.04 renamed some
       // for 64-bit time; the old name is the fallback for older releases.
       depends: [
@@ -3669,7 +3708,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     t3codeCommitHash: commitHash,
     private: true,
     packageManager: rootPackageJson.packageManager,
-    description: "T3 Code desktop build",
+    description: `${resolveDesktopBaseName()} desktop build`,
     // Required by the .deb control file.
     homepage: "https://t3.codes",
     author: "T3 Tools",

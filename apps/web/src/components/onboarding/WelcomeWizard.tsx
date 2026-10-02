@@ -86,6 +86,7 @@ import { Dialog } from "../ui/dialog";
 import { toastManager } from "../ui/toast";
 import { cn } from "../../lib/utils";
 import { formatRelativeTime } from "../../timestampFormat";
+import { APP_BASE_NAME, APP_HAS_T3_WORDMARK } from "~/branding";
 
 /**
  * First-run welcome wizard. Rendered over the workspace at `/welcome` on a
@@ -217,14 +218,18 @@ export function WelcomeWizard({
         initialFocus={() => document.getElementById("onboarding-pairing-url") ?? true}
       >
         <WizardHeader
-          title="Set up T3 Code"
+          title={`Set up ${APP_BASE_NAME}`}
           identity={
-            <div className="flex items-baseline gap-1.5" role="img" aria-label="T3 Code">
-              <T3Wordmark className="h-4 w-auto shrink-0" aria-hidden />
-              <span className="text-2xl font-medium tracking-tight text-muted-foreground">
-                Code
-              </span>
-            </div>
+            APP_HAS_T3_WORDMARK ? (
+              <div className="flex items-baseline gap-1.5" role="img" aria-label={APP_BASE_NAME}>
+                <T3Wordmark className="h-4 w-auto shrink-0" aria-hidden />
+                <span className="text-2xl font-medium tracking-tight text-muted-foreground">
+                  Code
+                </span>
+              </div>
+            ) : (
+              <span className="text-2xl font-medium tracking-tight">{APP_BASE_NAME}</span>
+            )
           }
         >
           <WizardSteps
@@ -499,7 +504,7 @@ function ConnectAccountOption({
             </p>
             <CommandBlock command="npx t3 connect" className="mt-3" />
             <p className="mt-3 text-xs text-muted-foreground">
-              Keep T3 Code running. Select the computers you want to set up above.
+              Keep {APP_BASE_NAME} running. Select the computers you want to set up above.
             </p>
           </div>
         </CollapsiblePanel>

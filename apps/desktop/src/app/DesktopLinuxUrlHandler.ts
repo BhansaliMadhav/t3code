@@ -11,6 +11,7 @@ import * as ElectronProtocol from "../electron/ElectronProtocol.ts";
 import * as DesktopAssets from "./DesktopAssets.ts";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 import { makeComponentLogger } from "./DesktopObservability.ts";
+import { DESKTOP_VARIANT } from "./DesktopVariant.ts";
 
 // Linux ships as an AppImage, so the .desktop entry users end up with is
 // created by whatever integration tool they use (AppImageLauncher names it
@@ -86,7 +87,8 @@ export function escapeDesktopEntryExecArgument(value: string): string {
 export function renderUrlHandlerDesktopEntry(input: {
   readonly displayName: string;
   readonly execTarget: string;
-  readonly scheme: string;
+  /** Omitted for builds that must not claim the scheme, such as M Code. */
+  readonly scheme?: string | undefined;
   readonly iconPath?: string;
 }): string {
   return [
@@ -98,7 +100,7 @@ export function renderUrlHandlerDesktopEntry(input: {
     "Terminal=false",
     "NoDisplay=true",
     "StartupNotify=false",
-    `MimeType=x-scheme-handler/${input.scheme};`,
+    ...(input.scheme === undefined ? [] : [`MimeType=x-scheme-handler/${input.scheme};`]),
     "",
   ].join("\n");
 }
@@ -132,7 +134,7 @@ export const make = Effect.gen(function* () {
     const content = renderUrlHandlerDesktopEntry({
       displayName: environment.displayName,
       execTarget,
-      scheme,
+      ...(DESKTOP_VARIANT.ownsUrlScheme ? { scheme } : {}),
       ...(environment.isPackaged ? { iconPath } : {}),
     });
     // Pre-ready setup normally wrote this already. Avoid truncating a valid
@@ -224,7 +226,7 @@ export const make = Effect.gen(function* () {
       return;
     }
     yield* writeDesktopEntry;
-    if (!environment.isPackaged) return;
+    if (!environment.isPackaged || !DESKTOP_VARIANT.ownsUrlScheme) return;
 
     yield* Effect.gen(function* () {
       const { png } = yield* assets.iconPaths;
