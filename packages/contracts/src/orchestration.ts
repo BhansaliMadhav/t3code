@@ -790,6 +790,36 @@ export const ThreadPullRequestLink = Schema.Struct({
 });
 export type ThreadPullRequestLink = typeof ThreadPullRequestLink.Type;
 
+export const ThreadOrchestrationWorkerRepo = Schema.Struct({
+  projectId: ProjectId,
+  repoRoot: TrimmedNonEmptyString,
+  worktreePath: TrimmedNonEmptyString,
+  branch: TrimmedNonEmptyString,
+});
+export type ThreadOrchestrationWorkerRepo = typeof ThreadOrchestrationWorkerRepo.Type;
+
+// Orchestrator chat mode. Fixed at thread.created: an orchestrator thread's
+// agent gets the orchestrator MCP toolkit, and a worker is a child thread it
+// spawned. workspacePath is set only for multi-repo workers, whose
+// worktreePath is a plain folder holding one git worktree per repo.
+// workspace "existing" marks a worker borrowing a project checkout or a
+// worktree it did not create; T3 never removes those. Absent means "created".
+export const ThreadOrchestration = Schema.Union([
+  Schema.Struct({ role: Schema.Literal("orchestrator") }),
+  Schema.Struct({
+    role: Schema.Literal("worker"),
+    parentThreadId: ThreadId,
+    workspacePath: Schema.NullOr(TrimmedNonEmptyString),
+    repos: Schema.Array(ThreadOrchestrationWorkerRepo),
+    workspace: Schema.optional(Schema.Literals(["created", "existing"])),
+  }),
+]);
+export type ThreadOrchestration = typeof ThreadOrchestration.Type;
+
+// What a client may ask for. Workers carry filesystem paths the server later
+// deletes, so only the server creates them (ServerThreadCreateCommand).
+const ClientThreadOrchestration = Schema.Struct({ role: Schema.Literal("orchestrator") });
+
 export const OrchestrationThread = Schema.Struct({
   id: ThreadId,
   projectId: ProjectId,
@@ -842,6 +872,8 @@ export const OrchestrationThread = Schema.Struct({
   // Survives manual settle, un-settle, and activity: only the user clears it.
   // Optional so payloads from older servers still decode.
   autoSettleDisabledAt: Schema.optional(Schema.NullOr(IsoDateTime)),
+  // Immutable chat mode set at creation. Optional so older servers decode.
+  orchestration: Schema.optional(Schema.NullOr(ThreadOrchestration)),
   // Pending-only state. Optional so older servers remain compatible.
   titleRegeneration: Schema.optional(Schema.NullOr(ThreadTitleRegeneration)),
   titleState: Schema.optional(Schema.NullOr(ThreadTitleState)),
@@ -913,6 +945,7 @@ export const OrchestrationThreadShell = Schema.Struct({
   pinOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   activeOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   autoSettleDisabledAt: Schema.optional(Schema.NullOr(IsoDateTime)),
+  orchestration: Schema.optional(Schema.NullOr(ThreadOrchestration)),
   titleRegeneration: Schema.optional(Schema.NullOr(ThreadTitleRegeneration)),
   titleState: Schema.optional(Schema.NullOr(ThreadTitleState)),
   session: Schema.NullOr(OrchestrationSession),
@@ -1131,6 +1164,26 @@ const ThreadCreateCommand = Schema.Struct({
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
   createdAt: IsoDateTime,
   historyImport: Schema.optional(Schema.Literal(true)),
+  orchestration: Schema.optional(Schema.NullOr(ClientThreadOrchestration)),
+});
+
+// The server-only shape of thread.create, the one way to create a worker.
+const ServerThreadCreateCommand = Schema.Struct({
+  type: Schema.Literal("thread.create"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  projectId: ProjectId,
+  title: TrimmedNonEmptyString,
+  modelSelection: ModelSelection,
+  runtimeMode: RuntimeMode,
+  interactionMode: ProviderInteractionMode.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_PROVIDER_INTERACTION_MODE)),
+  ),
+  branch: Schema.NullOr(TrimmedNonEmptyString),
+  worktreePath: Schema.NullOr(TrimmedNonEmptyString),
+  createdAt: IsoDateTime,
+  historyImport: Schema.optional(Schema.Literal(true)),
+  orchestration: Schema.optional(Schema.NullOr(ThreadOrchestration)),
 });
 
 const ThreadDeleteCommand = Schema.Struct({
@@ -1298,6 +1351,7 @@ const ThreadTurnStartBootstrapCreateThread = Schema.Struct({
   branch: Schema.NullOr(TrimmedNonEmptyString),
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
   createdAt: IsoDateTime,
+  orchestration: Schema.optional(Schema.NullOr(ClientThreadOrchestration)),
 });
 
 const ThreadTurnStartBootstrapPrepareWorktree = Schema.Struct({
@@ -1659,6 +1713,7 @@ const ThreadPullRequestLinkSyncCommand = Schema.Struct({
 });
 
 const InternalOrchestrationCommand = Schema.Union([
+  ServerThreadCreateCommand,
   ThreadAutoSettleCommand,
   ThreadPullRequestSyncCommand,
   ThreadPullRequestLinkSyncCommand,
@@ -1772,6 +1827,7 @@ export const ThreadCreatedPayload = Schema.Struct({
   ),
   branch: Schema.NullOr(TrimmedNonEmptyString),
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
+  orchestration: Schema.optional(Schema.NullOr(ThreadOrchestration)),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
 });

@@ -23,6 +23,13 @@ export const BRAND_ASSET_PATHS = {
   nightlyWebFavicon32Png: "assets/nightly/nightly-web-favicon-32x32.png",
   nightlyWebAppleTouchIconPng: "assets/nightly/nightly-web-apple-touch-180.png",
 
+  mcodeUniversalIconPng: "assets/mcode/mcode-universal-1024.png",
+  mcodeWindowsIconIco: "assets/mcode/mcode-windows.ico",
+  mcodeWebFaviconIco: "assets/mcode/mcode-web-favicon.ico",
+  mcodeWebFavicon16Png: "assets/mcode/mcode-16.png",
+  mcodeWebFavicon32Png: "assets/mcode/mcode-32.png",
+  mcodeWebAppleTouchIconPng: "assets/mcode/mcode-180.png",
+
   developmentDesktopIconPng: "assets/dev/blueprint-macos-1024.png",
   developmentWindowsIconIco: "assets/dev/blueprint-windows.ico",
   developmentWebFaviconIco: "assets/dev/blueprint-web-favicon.ico",
@@ -31,7 +38,7 @@ export const BRAND_ASSET_PATHS = {
   developmentWebAppleTouchIconPng: "assets/dev/blueprint-web-apple-touch-180.png",
 } as const;
 
-export type WebAssetBrand = "development" | "nightly" | "production";
+export type WebAssetBrand = "development" | "nightly" | "production" | "mcode";
 
 export const WEB_ASSET_CHANNELS = ["latest", "nightly"] as const;
 
@@ -76,7 +83,18 @@ const WEB_ICON_SOURCE_PATHS_BY_BRAND = {
     favicon32Png: BRAND_ASSET_PATHS.productionWebFavicon32Png,
     appleTouchIconPng: BRAND_ASSET_PATHS.productionWebAppleTouchIconPng,
   },
+  mcode: {
+    faviconIco: BRAND_ASSET_PATHS.mcodeWebFaviconIco,
+    favicon16Png: BRAND_ASSET_PATHS.mcodeWebFavicon16Png,
+    favicon32Png: BRAND_ASSET_PATHS.mcodeWebFavicon32Png,
+    appleTouchIconPng: BRAND_ASSET_PATHS.mcodeWebAppleTouchIconPng,
+  },
 } as const satisfies Record<WebAssetBrand, Record<keyof typeof WEB_ICON_TARGET_FILENAMES, string>>;
+
+/** Brands shipped under another product name; applying one renames "T3 Code" in index.html. */
+export const WEB_ASSET_BRAND_APP_NAMES: Partial<Record<WebAssetBrand, string>> = {
+  mcode: "M Code",
+};
 
 export function resolveWebIconOverrides(
   brand: WebAssetBrand,

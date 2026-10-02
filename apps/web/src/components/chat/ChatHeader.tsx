@@ -4,14 +4,16 @@ import {
   type ProjectScript,
   type ResolvedKeybindingsConfig,
   type ThreadId,
+  type ThreadOrchestration,
 } from "@t3tools/contracts";
+import { Link } from "@tanstack/react-router";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import { ChevronDownIcon, EllipsisIcon } from "lucide-react";
+import { ArrowLeftIcon, ChevronDownIcon, EllipsisIcon, WorkflowIcon } from "lucide-react";
 import {
   memo,
   useCallback,
@@ -50,6 +52,7 @@ import {
 } from "../WorkspaceBreadcrumb";
 import { cn } from "~/lib/utils";
 import { useIsMobile } from "~/hooks/useMediaQuery";
+import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Menu, MenuPopup, MenuSeparator, MenuTrigger } from "../ui/menu";
 
@@ -60,6 +63,8 @@ interface ChatHeaderProps {
   activeThreadTitle: string;
   /** Drafts have no server thread yet, so the title carries no action menu. */
   isServerThread: boolean;
+  /** Orchestrator chats get a badge; workers link back to their orchestrator. */
+  orchestration?: ThreadOrchestration | null | undefined;
   activeProject: EnvironmentProject | null;
   openInCwd: string | null;
   activeProjectScripts: ReadonlyArray<ProjectScript> | undefined;
@@ -129,6 +134,7 @@ export const ChatHeader = memo(function ChatHeader({
   draftId,
   activeThreadTitle,
   isServerThread,
+  orchestration,
   activeProject,
   openInCwd,
   activeProjectScripts,
@@ -485,6 +491,25 @@ export const ChatHeader = memo(function ChatHeader({
               <TooltipPopup side="top">{activeThreadTitle}</TooltipPopup>
             </Tooltip>
           )}
+          {isServerThread && orchestration?.role === "orchestrator" ? (
+            <Badge variant="info" className="shrink-0">
+              <WorkflowIcon aria-hidden />
+              Orchestrator
+            </Badge>
+          ) : null}
+          {orchestration?.role === "worker" ? (
+            <Link
+              to="/$environmentId/$threadId"
+              params={{
+                environmentId: activeThreadEnvironmentId,
+                threadId: orchestration.parentThreadId,
+              }}
+              className="inline-flex shrink-0 items-center gap-1 rounded-sm text-muted-foreground text-xs transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <ArrowLeftIcon aria-hidden className="size-3.5" />
+              Orchestrator
+            </Link>
+          ) : null}
         </WorkspaceBreadcrumbItem>
       </WorkspaceBreadcrumb>
       <div

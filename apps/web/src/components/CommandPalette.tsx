@@ -43,6 +43,7 @@ import {
 } from "@t3tools/contracts";
 import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
 import * as Option from "effect/Option";
+import { latestOrchestratorThread } from "../orchestratorChat";
 import {
   ArrowLeftIcon,
   ChartNoAxesColumnIcon,
@@ -64,6 +65,7 @@ import {
   SquarePenIcon,
   SunIcon,
   TextSearchIcon,
+  WorkflowIcon,
 } from "lucide-react";
 import {
   useCallback,
@@ -1901,6 +1903,47 @@ function OpenCommandPaletteDialog(props: {
             activeThread: activeThread ?? undefined,
             defaultProjectRef,
             handleNewThread,
+          });
+        },
+      });
+    }
+
+    actionItems.push({
+      kind: "action",
+      value: "action:new-orchestrator-chat",
+      searchTerms: ["new orchestrator", "orchestrator chat", "workers", "plan", "agents"],
+      title: "New orchestrator chat",
+      icon: <WorkflowIcon className={ITEM_ICON_CLASS} />,
+      shortcutCommand: "chat.newOrchestrator",
+      run: async () => {
+        await startNewThreadFromContext(
+          {
+            activeDraftThread,
+            activeThread: activeThread ?? undefined,
+            defaultProjectRef,
+            handleNewThread,
+          },
+          { orchestrator: true },
+        );
+      },
+    });
+
+    const latestOrchestrator = latestOrchestratorThread(threads);
+    if (latestOrchestrator !== null) {
+      actionItems.push({
+        kind: "action",
+        value: "action:go-to-orchestrator",
+        searchTerms: ["go to orchestrator", "orchestrator chat", "workers"],
+        title: "Go to orchestrator",
+        description: latestOrchestrator.title,
+        icon: <WorkflowIcon className={ITEM_ICON_CLASS} />,
+        shortcutCommand: "chat.goToOrchestrator",
+        run: async () => {
+          await navigate({
+            to: "/$environmentId/$threadId",
+            params: buildThreadRouteParams(
+              scopeThreadRef(latestOrchestrator.environmentId, latestOrchestrator.id),
+            ),
           });
         },
       });

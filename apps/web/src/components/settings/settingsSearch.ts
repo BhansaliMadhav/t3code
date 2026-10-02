@@ -274,6 +274,18 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["combine matching repositories environments sidebar"],
   },
   {
+    id: "default-chat-mode",
+    title: "Default chat mode",
+    to: "/settings/general",
+    searchTerms: ["orchestrator normal workers agents chat mode new thread"],
+  },
+  {
+    id: "worker-checkout",
+    title: "Where workers run",
+    to: "/settings/general",
+    searchTerms: ["orchestrator workers worktree checkout local existing branch"],
+  },
+  {
     id: "working-shelf",
     title: "Working section (beta)",
     to: "/settings/general",

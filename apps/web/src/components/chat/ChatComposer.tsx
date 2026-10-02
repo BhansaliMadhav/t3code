@@ -945,6 +945,7 @@ import {
   PencilRulerIcon,
   PlayIcon,
   ShieldIcon,
+  WorkflowIcon,
   XIcon,
 } from "lucide-react";
 import { proposedPlanTitle } from "../../proposedPlan";
@@ -1083,9 +1084,12 @@ const ComposerFooterModeControls = memo(function ComposerFooterModeControls(prop
   showInteractionModeToggle: boolean;
   interactionMode: ProviderInteractionMode;
   runtimeMode: RuntimeMode;
+  /** Present only on drafts: the chat mode is fixed once the thread exists. */
+  orchestrator?: boolean | undefined;
   size?: "sm" | "xs";
   hidden?: boolean;
   onToggleInteractionMode: () => void;
+  onToggleOrchestrator?: (() => void) | undefined;
   onRuntimeModeChange: (mode: RuntimeMode) => void;
 }) {
   const size = props.size ?? "sm";
@@ -1136,8 +1140,43 @@ const ComposerFooterModeControls = memo(function ComposerFooterModeControls(prop
     </>
   ) : null;
 
+  const chatModeTooltip = props.orchestrator
+    ? "Orchestrator chat — plans work and starts worker threads. Click for a normal chat."
+    : "Normal chat — click to make this an orchestrator chat that starts worker threads";
+  const chatModeToggle =
+    props.orchestrator !== undefined && props.onToggleOrchestrator ? (
+      <>
+        <ComposerControlSeparator size={size} />
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <ComposerControl
+                size={size}
+                className="shrink-0 whitespace-nowrap"
+                aria-pressed={props.orchestrator}
+                type="button"
+                onClick={props.onToggleOrchestrator}
+                aria-label={chatModeTooltip}
+              />
+            }
+          >
+            <ComposerControlIcon
+              icon={WorkflowIcon}
+              size={size}
+              className={props.orchestrator ? "text-current opacity-100" : undefined}
+            />
+            <span data-composer-control-label className="sr-only sm:not-sr-only">
+              {props.orchestrator ? "Orchestrator" : "Normal"}
+            </span>
+          </TooltipTrigger>
+          <TooltipPopup side="top">{chatModeTooltip}</TooltipPopup>
+        </Tooltip>
+      </>
+    ) : null;
+
   return (
     <>
+      {chatModeToggle}
       <ComposerControlSeparator size={size} />
 
       <Tooltip>
@@ -1334,6 +1373,7 @@ export interface ChatComposerProps {
   draftId: DraftId | null;
   multipleModelSelections: ReadonlyArray<ModelSelection> | null;
   supportsMultipleModels: boolean;
+  supportsOrchestratorChats?: boolean | undefined;
   onMultipleModelSelectionsChange: React.Dispatch<
     React.SetStateAction<ReadonlyArray<ModelSelection> | null>
   >;
@@ -1500,6 +1540,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     draftId,
     multipleModelSelections,
     supportsMultipleModels,
+    supportsOrchestratorChats,
     onMultipleModelSelectionsChange: setMultipleModelSelections,
     activeThreadId,
     activeThreadEnvironmentId: _activeThreadEnvironmentId,
@@ -1780,6 +1821,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     (store) => store.syncPersistedAttachments,
   );
   const getComposerDraft = useComposerDraftStore((store) => store.getComposerDraft);
+  const setDraftThreadContext = useComposerDraftStore((store) => store.setDraftThreadContext);
+  const draftOrchestrator = activeThread?.orchestration?.role === "orchestrator";
+  const toggleDraftOrchestrator = useCallback(() => {
+    setDraftThreadContext(composerDraftTarget, { orchestrator: !draftOrchestrator });
+  }, [composerDraftTarget, draftOrchestrator, setDraftThreadContext]);
 
   useEffect(() => {
     if (!attachmentUploadsCapabilityKnown) {
@@ -4991,9 +5037,15 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           showInteractionModeToggle={planModeUiEnabled}
           interactionMode={interactionMode}
           runtimeMode={runtimeMode}
+          orchestrator={
+            routeKind === "draft" && supportsOrchestratorChats ? draftOrchestrator : undefined
+          }
           size={composerControlsInStrip ? "xs" : "sm"}
           hidden={composerControlsHidden || restingHiddenBlockCount > 0}
           onToggleInteractionMode={toggleInteractionMode}
+          onToggleOrchestrator={
+            routeKind === "draft" && supportsOrchestratorChats ? toggleDraftOrchestrator : undefined
+          }
           onRuntimeModeChange={handleRuntimeModeChange}
         />
       ),

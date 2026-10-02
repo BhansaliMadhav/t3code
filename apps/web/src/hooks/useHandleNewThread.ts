@@ -26,6 +26,7 @@ import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import { readProjects, readThreadShell, useProjects, useThread } from "../state/entities";
 import {
   hasExplicitComposerModelSelection,
+  resolveNewDraftOrchestrator,
   resolveNewDraftStartFromOrigin,
   resolveNewThreadModelSelectionOverride,
 } from "../lib/chatThreadActions";
@@ -57,6 +58,7 @@ function pickExplicitWorkspaceOptions(options: NewThreadWorkspaceOptions | undef
 export function useNewThreadHandler() {
   const environmentServerConfigs = useAtomValue(environmentServerConfigsAtom);
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
+  const defaultChatMode = useClientSettings((settings) => settings.defaultChatMode);
   const router = useRouter();
   const getCurrentRouteTarget = useCallback(() => {
     const currentRouteParams = router.state.matches[router.state.matches.length - 1]?.params ?? {};
@@ -71,6 +73,8 @@ export function useNewThreadHandler() {
         worktreePath?: string | null;
         envMode?: DraftThreadEnvMode;
         startFromOrigin?: boolean;
+        /** Chat mode for the new draft; defaults to the current thread's mode, then the setting. */
+        orchestrator?: boolean;
         replace?: boolean;
       },
       // Which draft the thread ended up in, so a caller that has something to put in it — a
@@ -123,6 +127,20 @@ export function useNewThreadHandler() {
         carrySourceShell?.interactionMode ??
         carrySourceDraft?.interactionMode ??
         null;
+      const orchestrator = resolveNewDraftOrchestrator({
+        supported:
+          environmentServerConfigs.get(projectRef.environmentId)?.environment?.capabilities
+            ?.orchestratorChats === true,
+        explicit: options?.orchestrator,
+        carrySource: carrySourceShell
+          ? (carrySourceShell.orchestration?.role ?? "normal")
+          : carrySourceDraft
+            ? carrySourceDraft.orchestrator
+              ? "orchestrator"
+              : "normal"
+            : null,
+        defaultChatMode,
+      });
       const project = projects.find(
         (candidate) =>
           candidate.id === projectRef.projectId &&
@@ -266,6 +284,9 @@ export function useNewThreadHandler() {
               ...(carryInteractionMode ? { interactionMode: carryInteractionMode } : {}),
             });
           }
+          if (!isDraftAlreadyOpen || options?.orchestrator !== undefined) {
+            setDraftThreadContext(emptyStoredDraftThread.draftId, { orchestrator });
+          }
           // Model intent: an explicit human pick always stands. Seeds and
           // legacy entries alike re-resolve here — sticky first, mirroring
           // the mint-fresh path, then the project default or carried
@@ -343,6 +364,9 @@ export function useNewThreadHandler() {
         ) {
           setDraftThreadContext(currentRouteTarget.draftId, pickExplicitWorkspaceOptions(options));
         }
+        if (options?.orchestrator !== undefined) {
+          setDraftThreadContext(currentRouteTarget.draftId, { orchestrator: options.orchestrator });
+        }
         setLogicalProjectDraftThreadId(logicalProjectKey, projectRef, currentRouteTarget.draftId, {
           threadId: latestActiveDraftThread.threadId,
           createdAt: latestActiveDraftThread.createdAt,
@@ -414,6 +438,7 @@ export function useNewThreadHandler() {
             }),
           runtimeMode: defaultRuntimeMode,
           ...(carryInteractionMode ? { interactionMode: carryInteractionMode } : {}),
+          orchestrator,
         });
         applyStickyState(draftId);
         const modelSelectionOverride = resolveModelSelectionOverride(draftId);
@@ -430,7 +455,13 @@ export function useNewThreadHandler() {
         return { draftId, threadId };
       })();
     },
-    [environmentServerConfigs, getCurrentRouteTarget, projectGroupingSettings, router],
+    [
+      defaultChatMode,
+      environmentServerConfigs,
+      getCurrentRouteTarget,
+      projectGroupingSettings,
+      router,
+    ],
   );
 }
 

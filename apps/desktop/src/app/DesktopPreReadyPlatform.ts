@@ -12,6 +12,7 @@ import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import * as DesktopEarlyElectronStartup from "./DesktopEarlyElectronStartup.ts";
 import { resolveDesktopAppBranding } from "./DesktopEnvironment.ts";
 import { renderUrlHandlerDesktopEntry } from "./DesktopLinuxUrlHandler.ts";
+import { DESKTOP_VARIANT } from "./DesktopVariant.ts";
 import * as ElectronProtocol from "../electron/ElectronProtocol.ts";
 
 export interface DesktopPreReadyCommandLineReader {
@@ -98,7 +99,9 @@ export const make = Effect.gen(function* () {
               appVersion: Electron.app.getVersion(),
             }).displayName,
             execTarget: process.env.APPIMAGE?.trim() || process.execPath,
-            scheme: ElectronProtocol.getDesktopScheme(linux.isDevelopment),
+            ...(DESKTOP_VARIANT.ownsUrlScheme
+              ? { scheme: ElectronProtocol.getDesktopScheme(linux.isDevelopment) }
+              : {}),
             ...(iconPath === undefined ? {} : { iconPath }),
           }),
           "utf8",

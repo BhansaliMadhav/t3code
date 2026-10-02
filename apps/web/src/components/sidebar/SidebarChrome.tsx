@@ -6,6 +6,7 @@ import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { useEnvironmentIdentificationMode } from "../../hooks/useSettings";
 import { cn } from "../../lib/utils";
 import { useEnvironments } from "../../state/environments";
+import { APP_BASE_NAME, APP_HAS_T3_WORDMARK } from "~/branding";
 import { T3Wordmark } from "../T3Wordmark";
 import {
   resolveEnvironmentIdentificationPillLabel,
@@ -87,15 +88,21 @@ function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
     >
       {/* Center the visible capitals, without the font's ascender/descender space. */}
       <span className="inline-flex min-w-0 items-baseline gap-1 text-sm font-medium tracking-tight">
-        <T3Wordmark aria-label="T3" className="h-[1cap] w-auto shrink-0" />
-        <span
-          className={cn(
-            "truncate [text-box:trim-both_cap_alphabetic]",
-            onBackdrop ? "text-white/70" : "text-muted-foreground",
-          )}
-        >
-          Code
-        </span>
+        {APP_HAS_T3_WORDMARK ? (
+          <>
+            <T3Wordmark aria-label="T3" className="h-[1cap] w-auto shrink-0" />
+            <span
+              className={cn(
+                "truncate [text-box:trim-both_cap_alphabetic]",
+                onBackdrop ? "text-white/70" : "text-muted-foreground",
+              )}
+            >
+              Code
+            </span>
+          </>
+        ) : (
+          <span className="truncate [text-box:trim-both_cap_alphabetic]">{APP_BASE_NAME}</span>
+        )}
       </span>
     </Link>
   );

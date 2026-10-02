@@ -9,6 +9,18 @@ function readInjectedDesktopAppBranding(): DesktopAppBranding | null {
   return window.desktopBridge?.getAppBranding?.() ?? null;
 }
 
+// Rebranded builds rewrite this tag in index.html, so browsers served by such
+// a server show its name even without the desktop bridge.
+function readDocumentAppName(): string | null {
+  if (typeof document === "undefined" || typeof document.querySelector !== "function") {
+    return null;
+  }
+
+  return (
+    document.querySelector<HTMLMetaElement>('meta[name="application-name"]')?.content.trim() || null
+  );
+}
+
 const injectedDesktopAppBranding = readInjectedDesktopAppBranding();
 const hostedAppChannel = import.meta.env.VITE_HOSTED_APP_CHANNEL?.trim().toLowerCase();
 
@@ -16,7 +28,11 @@ export const HOSTED_APP_CHANNEL =
   hostedAppChannel === "latest" || hostedAppChannel === "nightly" ? hostedAppChannel : null;
 export const HOSTED_APP_CHANNEL_LABEL =
   HOSTED_APP_CHANNEL === "nightly" ? "Nightly" : HOSTED_APP_CHANNEL === "latest" ? "Latest" : null;
-export const APP_BASE_NAME = injectedDesktopAppBranding?.baseName ?? "T3 Code";
+const T3_CODE_BASE_NAME = "T3 Code";
+export const APP_BASE_NAME =
+  injectedDesktopAppBranding?.baseName ?? readDocumentAppName() ?? T3_CODE_BASE_NAME;
+/** Builds named something else, such as the M Code desktop variant, show their name as text. */
+export const APP_HAS_T3_WORDMARK = APP_BASE_NAME === T3_CODE_BASE_NAME;
 export const APP_STAGE_LABEL =
   injectedDesktopAppBranding?.stageLabel ??
   HOSTED_APP_CHANNEL_LABEL ??

@@ -9,6 +9,7 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import {
   resolveThreadActionProjectRef,
   hasExplicitComposerModelSelection,
+  resolveNewDraftOrchestrator,
   resolveNewDraftStartFromOrigin,
   resolveNewThreadModelSelectionOverride,
   startNewThreadFromContext,
@@ -167,5 +168,45 @@ describe("chatThreadActions", () => {
 
     expect(didStart).toBe(false);
     expect(handleNewThread).not.toHaveBeenCalled();
+  });
+});
+
+describe("resolveNewDraftOrchestrator", () => {
+  const base = {
+    supported: true,
+    explicit: undefined,
+    carrySource: null,
+    defaultChatMode: "normal",
+  } as const;
+
+  it("follows an explicit request, but never on a server without orchestrator chats", () => {
+    expect(resolveNewDraftOrchestrator({ ...base, explicit: true })).toBe(true);
+    expect(
+      resolveNewDraftOrchestrator({ ...base, explicit: false, defaultChatMode: "orchestrator" }),
+    ).toBe(false);
+    expect(resolveNewDraftOrchestrator({ ...base, supported: false, explicit: true })).toBe(false);
+  });
+
+  it("carries the mode of the thread being viewed over the default", () => {
+    expect(resolveNewDraftOrchestrator({ ...base, carrySource: "orchestrator" })).toBe(true);
+    expect(
+      resolveNewDraftOrchestrator({
+        ...base,
+        carrySource: "normal",
+        defaultChatMode: "orchestrator",
+      }),
+    ).toBe(false);
+  });
+
+  it("uses the default chat mode from a worker or with nothing to carry", () => {
+    expect(
+      resolveNewDraftOrchestrator({
+        ...base,
+        carrySource: "worker",
+        defaultChatMode: "orchestrator",
+      }),
+    ).toBe(true);
+    expect(resolveNewDraftOrchestrator({ ...base, defaultChatMode: "orchestrator" })).toBe(true);
+    expect(resolveNewDraftOrchestrator(base)).toBe(false);
   });
 });

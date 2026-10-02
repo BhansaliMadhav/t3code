@@ -65,6 +65,7 @@ import {
   SquarePenIcon,
   TerminalIcon,
   Undo2Icon,
+  WorkflowIcon,
   XIcon,
 } from "lucide-react";
 import {
@@ -1069,6 +1070,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
    * composer. Absent when the sidebar cannot open server threads.
    */
   onFileDropThreads?: ((threadRef: ScopedThreadRef, files: File[]) => void) | undefined;
+  /** Orchestrator rows: how many of their workers are waiting on the user. */
+  workersWaitingCount?: number | undefined;
 }) {
   const {
     isRenaming,
@@ -1609,6 +1612,38 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
       <TooltipPopup side="top">Unsent draft</TooltipPopup>
     </Tooltip>
   ) : null;
+  const waitingWorkers = props.workersWaitingCount ?? 0;
+  const orchestratorMarker =
+    thread.orchestration?.role === "orchestrator" ? (
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <span
+              role="img"
+              aria-label={
+                waitingWorkers > 0
+                  ? `Orchestrator chat, ${waitingWorkers} worker${waitingWorkers === 1 ? "" : "s"} waiting on you`
+                  : "Orchestrator chat"
+              }
+              className={cn(
+                "inline-flex shrink-0 items-center gap-0.5 text-xs tabular-nums",
+                waitingWorkers > 0
+                  ? "font-medium text-info-foreground"
+                  : "text-muted-foreground/65",
+              )}
+            />
+          }
+        >
+          <WorkflowIcon aria-hidden className="size-3.5 shrink-0" />
+          {waitingWorkers > 0 ? waitingWorkers : null}
+        </TooltipTrigger>
+        <TooltipPopup side="top">
+          {waitingWorkers > 0
+            ? `${waitingWorkers} worker${waitingWorkers === 1 ? "" : "s"} waiting on you`
+            : "Orchestrator chat"}
+        </TooltipPopup>
+      </Tooltip>
+    ) : null;
   const showPin =
     props.isPinned && (!sortable?.isDragging || (props.dragOverPinned && props.dropVerb === null));
   const pinIndicator = showPin ? (
@@ -1681,6 +1716,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
               {props.project ? <ProjectFavicon project={props.project} className="size-4" /> : null}
             </span>
             {draftIndicator}
+            {orchestratorMarker}
             {title}
             {pinIndicator}
             {terminalStatusIcon}
@@ -1828,6 +1864,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
           <div className="relative z-10 h-[4.875rem] px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)">
             <div className="flex h-5 min-w-0 items-center gap-1.5">
               {draftIndicator}
+              {orchestratorMarker}
               {props.project ? (
                 <ProjectFavicon project={props.project} className="size-4 shrink-0" />
               ) : null}
@@ -2607,6 +2644,7 @@ export default function Sidebar() {
     snoozedThreads,
     settledThreads,
     snoozeNow,
+    workersByParentKey,
   } = useMemo(() => {
     // Snooze classification uses a REAL clock, not the quantized minute:
     // wake times are second-precise and a woken thread must not linger on
@@ -2614,12 +2652,37 @@ export default function Sidebar() {
     // memo exactly at the next wake boundary.
     void snoozeWakeTick;
     const preciseNow = new Date().toISOString();
-    const visible = threads.filter(
-      (thread) =>
-        thread.archivedAt === null &&
-        (scopedProjectKeys === null ||
-          scopedProjectKeys.has(`${thread.environmentId}:${thread.projectId}`)),
+    const inScope = (thread: EnvironmentThreadShell) =>
+      thread.archivedAt === null &&
+      (scopedProjectKeys === null ||
+        scopedProjectKeys.has(`${thread.environmentId}:${thread.projectId}`));
+    // Workers nest under their orchestrator row wherever their own project
+    // is, so they leave the sections. A worker whose orchestrator is hidden
+    // (archived, out of scope, or gone) lists like any other thread.
+    const orchestratorKeys = new Set(
+      threads
+        .filter((thread) => thread.orchestration?.role === "orchestrator" && inScope(thread))
+        .map((thread) => scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id))),
     );
+    const workersByParent = new Map<string, EnvironmentThreadShell[]>();
+    const visible = threads.filter((thread) => {
+      if (thread.archivedAt !== null) return false;
+      if (thread.orchestration?.role === "worker") {
+        const parentKey = scopedThreadKey(
+          scopeThreadRef(thread.environmentId, thread.orchestration.parentThreadId),
+        );
+        if (orchestratorKeys.has(parentKey)) {
+          const siblings = workersByParent.get(parentKey);
+          if (siblings) siblings.push(thread);
+          else workersByParent.set(parentKey, [thread]);
+          return false;
+        }
+      }
+      return inScope(thread);
+    });
+    for (const siblings of workersByParent.values()) {
+      siblings.sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+    }
     observeInboxReturns(workingShelfEnabled ? threads : null);
     const pinned: EnvironmentThreadShell[] = [];
     const active: EnvironmentThreadShell[] = [];
@@ -2717,6 +2780,7 @@ export default function Sidebar() {
       ),
       settledThreads: sortSettledThreads(settled),
       snoozeNow: preciseNow,
+      workersByParentKey: workersByParent as ReadonlyMap<string, readonly EnvironmentThreadShell[]>,
     };
   }, [
     nowMinute,
@@ -2727,6 +2791,18 @@ export default function Sidebar() {
     threads,
     workingShelfEnabled,
   ]);
+
+  // Orchestrator rows whose nested workers the user folded away; expanded by default.
+  const [collapsedWorkerGroups, setCollapsedWorkerGroups] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const toggleWorkerGroup = useCallback((parentKey: string) => {
+    setCollapsedWorkerGroups((current) => {
+      const next = new Set(current);
+      if (!next.delete(parentKey)) next.add(parentKey);
+      return next;
+    });
+  }, []);
 
   const threadSearchInputRef = useRef<HTMLInputElement>(null);
   const [threadSearchQuery, setThreadSearchQuery] = useState("");
@@ -2739,8 +2815,16 @@ export default function Sidebar() {
       ...workingThreads,
       ...snoozedThreads,
       ...settledThreads,
+      ...[...workersByParentKey.values()].flat(),
     ],
-    [activeThreads, pinnedThreads, settledThreads, snoozedThreads, workingThreads],
+    [
+      activeThreads,
+      pinnedThreads,
+      settledThreads,
+      snoozedThreads,
+      workersByParentKey,
+      workingThreads,
+    ],
   );
   const searchEnvironmentIds = useMemo(
     () =>
@@ -2930,12 +3014,14 @@ export default function Sidebar() {
   const threadByKey = useMemo(
     () =>
       new Map(
-        orderedThreads.map(
+        // Nested workers resolve for row actions but stay out of the ordered list,
+        // so drag and keyboard traversal only walk top-level rows.
+        [...orderedThreads, ...[...workersByParentKey.values()].flat()].map(
           (thread) =>
             [scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)), thread] as const,
         ),
       ),
-    [orderedThreads],
+    [orderedThreads, workersByParentKey],
   );
   // Handlers read these through refs: depending on per-update Map/Set
   // identities would give every row a fresh callback prop on each shell
@@ -4946,6 +5032,14 @@ export default function Sidebar() {
                             onUnpin={attemptUnpin}
                             onAcknowledgeWoke={acknowledgeWoke}
                             onFileDropThreads={handleThreadFileDrop}
+                            workersWaitingCount={
+                              workersByParentKey
+                                .get(threadKey)
+                                ?.filter(
+                                  (worker) =>
+                                    worker.hasPendingUserInput || worker.hasPendingApprovals,
+                                ).length
+                            }
                           />
                         );
                       };
@@ -4985,6 +5079,40 @@ export default function Sidebar() {
                       for (const item of sidebarListItems) {
                         if (item.kind === "thread") {
                           items.push(renderThreadRow(threadByKey.get(item.key)!, item.section));
+                          const workers = workersByParentKey.get(item.key);
+                          if (workers !== undefined && workers.length > 0) {
+                            const expanded = !collapsedWorkerGroups.has(item.key);
+                            items.push(
+                              <li
+                                key={`${item.key}:workers`}
+                                role="presentation"
+                                className="list-none pl-3"
+                              >
+                                <button
+                                  type="button"
+                                  aria-expanded={expanded}
+                                  onClick={() => toggleWorkerGroup(item.key)}
+                                  className="flex h-6 w-full items-center gap-1 rounded-sm px-(--sidebar-row-content-inset) text-left text-secondary-label text-xs outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                                >
+                                  <ChevronDownIcon
+                                    aria-hidden
+                                    className={cn("size-3 shrink-0", !expanded && "-rotate-90")}
+                                  />
+                                  {workers.length} worker{workers.length === 1 ? "" : "s"}
+                                </button>
+                                {expanded ? (
+                                  <ul
+                                    role="presentation"
+                                    className="flex flex-col gap-px border-sidebar-border border-l pl-1"
+                                  >
+                                    {workers.map((worker) =>
+                                      renderThreadRowInner(worker, "active"),
+                                    )}
+                                  </ul>
+                                ) : null}
+                              </li>,
+                            );
+                          }
                           continue;
                         }
                         switch (item.marker) {

@@ -5,6 +5,7 @@ import {
   NIRI_CAPTURE_INTERFACE as INTERFACE,
   NIRI_CAPTURE_PATH as PATH,
 } from "./linuxCaptureSession.ts";
+import { DESKTOP_VARIANT } from "../app/DesktopVariant.ts";
 
 /** Niri owns the keybinding; this endpoint triggers capture without first focusing T3. */
 export async function startNiriCaptureShortcut(
@@ -55,7 +56,9 @@ export async function startNiriCaptureShortcut(
       }),
     ]);
     if (result !== RequestNameReply.PRIMARY_OWNER)
-      throw new Error("Another T3 Code instance already owns the capture shortcut.");
+      throw new Error(
+        `Another ${DESKTOP_VARIANT.baseName} instance already owns the capture shortcut.`,
+      );
     return close;
   } catch (error) {
     close();

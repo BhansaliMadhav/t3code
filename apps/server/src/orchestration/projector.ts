@@ -445,6 +445,7 @@ export function projectEvent(
             interactionMode: payload.interactionMode,
             branch: payload.branch,
             worktreePath: payload.worktreePath,
+            orchestration: payload.orchestration ?? null,
             pullRequests: [],
             branchPullRequest: null,
             latestTurn: null,

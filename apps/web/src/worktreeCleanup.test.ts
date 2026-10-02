@@ -84,6 +84,25 @@ describe("getOrphanedWorktreePathForThread", () => {
     const result = getOrphanedWorktreePathForThread(threads, ThreadId.make("thread-1"));
     expect(result).toBe("/tmp/repo/worktrees/feature-a");
   });
+
+  it("never offers a multi-repo worker's workspace folder as a worktree", () => {
+    const result = getOrphanedWorktreePathForThread(
+      [
+        {
+          id: ThreadId.make("worker-1"),
+          worktreePath: "/tmp/workspaces/worker-1",
+          orchestration: {
+            role: "worker",
+            parentThreadId: ThreadId.make("orchestrator-1"),
+            workspacePath: "/tmp/workspaces/worker-1",
+            repos: [],
+          },
+        },
+      ],
+      ThreadId.make("worker-1"),
+    );
+    expect(result).toBeNull();
+  });
 });
 
 describe("formatWorktreePathForDisplay", () => {

@@ -66,6 +66,7 @@ import Migration0051 from "./Migrations/051_ProjectionThreadMessageContext.ts";
 import Migration0052 from "./Migrations/052_ProjectionThreadTitleState.ts";
 import Migration0053 from "./Migrations/053_PullRequestFilesViewed.ts";
 import Migration0054 from "./Migrations/054_ProjectionThreadsAutoSettleDisabledAt.ts";
+import ensureProjectionThreadsOrchestration from "./Migrations/ProjectionThreadsOrchestration.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -169,6 +170,13 @@ export const runMigrations = Effect.fn("runMigrations")(function* ({
   toMigrationInclusive,
 }: RunMigrationsOptions = {}) {
   const executedMigrations = yield* run({ loader: makeMigrationLoader(toMigrationInclusive) });
+  // Fork-owned columns live outside the numbered sequence: the migrator skips
+  // any id at or below the latest recorded one, so a fork id would either
+  // collide with upstream's next migration or hide all of upstream's later
+  // ones. These steps are idempotent and run after every full migration.
+  if (toMigrationInclusive === undefined) {
+    yield* ensureProjectionThreadsOrchestration;
+  }
   const migrations = executedMigrations.map(([id, name]) => `${id}_${name}`);
   yield* migrations.length === 0
     ? Effect.logDebug("Database schema is current")

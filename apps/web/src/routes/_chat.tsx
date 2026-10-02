@@ -1,4 +1,4 @@
-import { Outlet, createFileRoute, redirect, useParams } from "@tanstack/react-router";
+import { Outlet, createFileRoute, redirect, useNavigate, useParams } from "@tanstack/react-router";
 import { useAtomValue } from "@effect/atom-react";
 import { useEffect, useMemo } from "react";
 
@@ -16,6 +16,8 @@ import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { useScratchProject } from "../hooks/useScratchProject";
 import { startNewThreadFromContext } from "../lib/chatThreadActions";
 import { isPreviewFocused } from "../lib/previewFocus";
+import { readLatestOrchestratorThreadRef } from "../orchestratorChat";
+import { buildThreadRouteParams } from "../threadRoutes";
 import { isTerminalFocused } from "../lib/terminalFocus";
 import { isEditableFocused } from "../lib/editableFocus";
 import { isModelPickerOpen } from "../modelPickerVisibility";
@@ -27,6 +29,7 @@ import { selectActiveRightPanel, useRightPanelStore } from "../rightPanelStore";
 import { useThreadSelectionStore } from "../threadSelectionStore";
 import { stackedThreadToast, toastManager } from "~/components/ui/toast";
 import { primaryServerKeybindingsAtom } from "~/state/server";
+import { APP_BASE_NAME } from "~/branding";
 
 function ChatRouteGlobalShortcuts() {
   const clearSelection = useThreadSelectionStore((state) => state.clearSelection);
@@ -39,6 +42,7 @@ function ChatRouteGlobalShortcuts() {
   const projects = useProjects();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const { scratchEnvironmentId, startScratchThread } = useScratchProject();
+  const navigate = useNavigate();
   const projectGroupCount = useMemo(
     () =>
       buildSidebarProjectSnapshots({
@@ -107,6 +111,33 @@ function ChatRouteGlobalShortcuts() {
         return;
       }
 
+      if (command === "chat.newOrchestrator") {
+        event.preventDefault();
+        event.stopPropagation();
+        void startNewThreadFromContext(
+          {
+            activeDraftThread,
+            activeThread: activeThread ?? undefined,
+            defaultProjectRef,
+            handleNewThread,
+          },
+          { orchestrator: true },
+        );
+        return;
+      }
+
+      if (command === "chat.goToOrchestrator") {
+        const orchestratorRef = readLatestOrchestratorThreadRef();
+        if (orchestratorRef === null) return;
+        event.preventDefault();
+        event.stopPropagation();
+        void navigate({
+          to: "/$environmentId/$threadId",
+          params: buildThreadRouteParams(orchestratorRef),
+        });
+        return;
+      }
+
       if (command === "chat.newWithoutProject") {
         const environmentId = scratchEnvironmentId(
           activeThread?.environmentId ?? activeDraftThread?.environmentId ?? primaryEnvironmentId,
@@ -146,7 +177,7 @@ function ChatRouteGlobalShortcuts() {
             stackedThreadToast({
               type: "info",
               title: "Preview is desktop-only",
-              description: "Open T3 Code in the desktop app to use the in-app preview.",
+              description: `Open ${APP_BASE_NAME} in the desktop app to use the in-app preview.`,
             }),
           );
           return;
@@ -192,6 +223,7 @@ function ChatRouteGlobalShortcuts() {
     handleNewThread,
     keybindings,
     defaultProjectRef,
+    navigate,
     previewOpen,
     primaryEnvironmentId,
     projectGroupCount,

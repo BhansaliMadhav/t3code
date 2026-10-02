@@ -34,4 +34,16 @@ describe("buildRuntimeInstructions", () => {
     expect(instructions).toContain("through the Cursor harness.");
     expect(instructions).not.toContain("reasoning effort");
   });
+
+  it("adds the orchestrator brief only for sessions granted the orchestrator capability", () => {
+    expect(buildRuntimeInstructions({ harness: "Claude Code" })).not.toContain(
+      "<orchestrator_mode>",
+    );
+    expect(
+      buildRuntimeInstructions({
+        harness: "Claude Code",
+        capabilities: new Set(["pull-requests", "orchestrator"]),
+      }),
+    ).toContain("<orchestrator_mode>");
+  });
 });

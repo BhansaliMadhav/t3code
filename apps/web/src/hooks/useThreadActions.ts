@@ -202,6 +202,9 @@ export function useThreadActions() {
   const deleteThreadMutation = useAtomCommand(threadEnvironment.delete, {
     reportFailure: false,
   });
+  const removeWorkerWorkspace = useAtomCommand(threadEnvironment.removeWorkerWorkspace, {
+    reportFailure: false,
+  });
   const settleThreadMutation = useAtomCommand(threadEnvironment.settle, {
     reportFailure: false,
   });
@@ -433,6 +436,41 @@ export function useThreadActions() {
         shouldDeleteWorktree = confirmationResult.value;
       }
 
+      // A multi-repo worker's folder of worktrees is not a worktree the
+      // prompt above knows about. The server can only remove it while the
+      // thread exists, so ask now and remove it before deleting.
+      const workerWorkspace =
+        thread.orchestration?.role === "worker" &&
+        thread.orchestration.workspacePath !== null &&
+        thread.worktreePath !== null
+          ? thread.orchestration
+          : null;
+      if (workerWorkspace && localApi) {
+        const confirmationResult = await settlePromise(() =>
+          localApi.dialogs.confirm(
+            [
+              `This worker keeps ${workerWorkspace.repos.length} worktrees in:`,
+              formatWorktreePathForDisplay(workerWorkspace.workspacePath!),
+              "",
+              "Delete them too? Uncommitted changes are lost; branches are kept.",
+            ].join("\n"),
+            { variant: "destructive" },
+          ),
+        );
+        if (confirmationResult._tag === "Failure") {
+          return confirmationResult;
+        }
+        if (confirmationResult.value) {
+          const removeResult = await removeWorkerWorkspace({
+            environmentId: threadRef.environmentId,
+            input: { threadId: threadRef.threadId },
+          });
+          if (removeResult._tag === "Failure") {
+            return removeResult;
+          }
+        }
+      }
+
       if (thread.session && thread.session.status !== "stopped") {
         await stopThreadSession({
           environmentId: threadRef.environmentId,
@@ -546,6 +584,7 @@ export function useThreadActions() {
       clearTerminalUiState,
       closeTerminal,
       deleteThreadMutation,
+      removeWorkerWorkspace,
       getCurrentRouteThreadRef,
       refreshVcsStatus,
       removeWorktree,

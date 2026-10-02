@@ -796,7 +796,10 @@ export const makeAntigravityAdapter = Effect.fn("makeAntigravityAdapter")(functi
                 ...(mcp?.agentDeviceEnvironment
                   ? { agentDeviceEnvironment: mcp.agentDeviceEnvironment }
                   : {}),
-                additionalDirectories: [serverConfig.attachmentsDir],
+                additionalDirectories: [
+                  serverConfig.attachmentsDir,
+                  ...(input.extraWritableRoots ?? []),
+                ],
                 ...(Option.isSome(cursor) ? { resumeSessionId: cursor.value.sessionId } : {}),
                 mcpServers: mcp
                   ? [
@@ -1085,7 +1088,12 @@ export const makeAntigravityAdapter = Effect.fn("makeAntigravityAdapter")(functi
                   ...prompt,
                   {
                     type: "text",
-                    text: buildRuntimeInstructions({ harness: "Antigravity", model }),
+                    text: buildRuntimeInstructions({
+                      harness: "Antigravity",
+                      model,
+                      capabilities: McpProviderSession.readMcpProviderSession(input.threadId)
+                        ?.capabilities,
+                    }),
                   },
                 ],
               },
