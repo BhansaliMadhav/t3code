@@ -8,12 +8,8 @@ import {
 } from "@react-navigation/native";
 import { SymbolView } from "../../components/AppSymbol";
 import { canCreateProjectInEnvironment } from "@t3tools/client-runtime/operations/projects";
-import {
-  isScratchProject,
-  resolveScratchEnvironmentId,
-} from "@t3tools/client-runtime/state/projects";
+import { isScratchProject } from "@t3tools/client-runtime/state/projects";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
-import type { EnvironmentId } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { useEffect, useRef, useState } from "react";
@@ -139,8 +135,7 @@ function NewTaskHeader(props: {
 export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRouteParams | undefined>) {
   const projects = useProjects();
   const [searchText, setSearchText] = useState("");
-  const { projectScopes, selectedEnvironmentId, chosenEnvironmentId, setProject } =
-    useNewTaskFlow();
+  const { projectScopes, selectedEnvironmentId, setProject } = useNewTaskFlow();
   const { state: catalogState } = useWorkspaceState();
   const navigation = useNavigation();
   const isFocused = useIsFocused();
@@ -160,8 +155,8 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
   const screenTitle = incomingShare ? "Start a task" : "Choose project";
   const projectEmptyState = deriveProjectEmptyState(catalogState);
   const serverConfigs = useServerConfigs();
-  // The Scratch project is reached through the No project entry, never as a
-  // project row of its own.
+  // Scratch projects are reached through the No project row, never as rows
+  // of their own.
   const listScopes = projectScopes.filter(
     (scope) =>
       !scope.projects.every((project) =>
@@ -182,35 +177,20 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
     reportFailure: false,
   });
   // Threads without a project need a connected environment that offers them.
-  // The machine follows web's useScratchProject rule; when that leaves it
-  // open, every machine that offers one gets its own entry so the user picks.
+  // The row starts on the selected environment when it has one, otherwise the
+  // first that does; the draft page's machine picker moves it from there.
   const scratchEnvironments = connectedEnvironments.filter(
     (environment) =>
       canCreateProjectInEnvironment(environment.connectionState) &&
       serverConfigs.get(environment.environmentId)?.scratchWorkspaceRoot !== undefined,
   );
-  const scratchEnvironmentId = resolveScratchEnvironmentId(
-    chosenEnvironmentId,
-    scratchEnvironments.map((environment) => environment.environmentId),
-  );
-  const scratchChoices = (
-    scratchEnvironmentId === null
-      ? scratchEnvironments
-      : scratchEnvironments.filter(
-          (environment) => environment.environmentId === scratchEnvironmentId,
-        )
-  ).map((environment) => {
-    const machineLabel = connectedEnvironments.length > 1 ? environment.environmentLabel : null;
-    return {
-      environmentId: environment.environmentId,
-      startLabel: machineLabel
-        ? `Start without a project on ${machineLabel}`
-        : "Start without a project",
-      rowLabel: machineLabel ? `No project on ${machineLabel}` : "No project",
-      rowSubtitle: machineLabel ? `On ${machineLabel}` : "Start a task without a project",
-    };
-  });
-  const canStartScratch = reservedDestinationProject === null;
+  const scratchEnvironment =
+    scratchEnvironments.find(
+      (environment) => environment.environmentId === selectedEnvironmentId,
+    ) ??
+    scratchEnvironments[0] ??
+    null;
+  const canStartScratch = scratchEnvironment !== null && reservedDestinationProject === null;
   const scratchStartInFlightRef = useRef(false);
 
   async function selectProject(project: EnvironmentProject): Promise<void> {
@@ -245,8 +225,9 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
     );
   }
 
-  async function startScratch(environmentId: EnvironmentId): Promise<void> {
-    if (scratchStartInFlightRef.current) return;
+  async function startScratch(): Promise<void> {
+    if (!scratchEnvironment || scratchStartInFlightRef.current) return;
+    const environmentId = scratchEnvironment.environmentId;
     scratchStartInFlightRef.current = true;
     try {
       const result = await ensureScratch({ environmentId, input: {} });
@@ -331,6 +312,55 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
               : {}),
           }}
         >
+          {canStartScratch && listScopes.length > 0 ? (
+            Platform.OS === "android" ? (
+              <View collapsable={false} className="overflow-hidden rounded-[28px] bg-card">
+                <MaterialListRow
+                  title="No project"
+                  subtitle="Start a task without a project"
+                  onPress={() => void startScratch()}
+                  leading={
+                    <SymbolView
+                      name="text.bubble"
+                      size={22}
+                      tintColorClassName="accent-icon-muted"
+                      type="monochrome"
+                    />
+                  }
+                />
+              </View>
+            ) : (
+              <View collapsable={false} className="overflow-hidden rounded-[24px] bg-card">
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="No project"
+                  onPress={() => void startScratch()}
+                  className="flex-row items-center gap-3 bg-card px-4 py-3.5"
+                >
+                  <View className="h-7 w-7 items-center justify-center">
+                    <SymbolView
+                      name="text.bubble"
+                      size={18}
+                      tintColorClassName="accent-icon-muted"
+                      type="monochrome"
+                    />
+                  </View>
+                  <View className="min-w-0 flex-1">
+                    <Text className="text-base font-t3-bold leading-snug">No project</Text>
+                    <Text className="text-xs leading-snug text-foreground-muted" numberOfLines={1}>
+                      Start a task without a project
+                    </Text>
+                  </View>
+                  <SymbolView
+                    name="chevron.right"
+                    size={14}
+                    tintColorClassName="accent-chevron"
+                    type="monochrome"
+                  />
+                </Pressable>
+              </View>
+            )
+          ) : null}
           {listScopes.length === 0 ? (
             <View
               collapsable={false}
@@ -359,16 +389,13 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
                         : navigation.navigate("ConnectionsNew")
                     }
                   />
-                  {canStartScratch
-                    ? scratchChoices.map((choice) => (
-                        <MaterialButton
-                          key={choice.environmentId}
-                          label={choice.startLabel}
-                          tone="secondary"
-                          onPress={() => void startScratch(choice.environmentId)}
-                        />
-                      ))
-                    : null}
+                  {canStartScratch ? (
+                    <MaterialButton
+                      label="Start without a project"
+                      tone="secondary"
+                      onPress={() => void startScratch()}
+                    />
+                  ) : null}
                 </>
               ) : !catalogState.hasReadyEnvironment ? (
                 <Pressable
@@ -389,19 +416,16 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
                       Add new project
                     </Text>
                   </Pressable>
-                  {canStartScratch
-                    ? scratchChoices.map((choice) => (
-                        <Pressable
-                          key={choice.environmentId}
-                          className="rounded-full bg-subtle px-4 py-2.5 active:opacity-70"
-                          onPress={() => void startScratch(choice.environmentId)}
-                        >
-                          <Text className="text-sm font-t3-bold text-foreground">
-                            {choice.startLabel}
-                          </Text>
-                        </Pressable>
-                      ))
-                    : null}
+                  {canStartScratch ? (
+                    <Pressable
+                      className="rounded-full bg-subtle px-4 py-2.5 active:opacity-70"
+                      onPress={() => void startScratch()}
+                    >
+                      <Text className="text-sm font-t3-bold text-foreground">
+                        Start without a project
+                      </Text>
+                    </Pressable>
+                  ) : null}
                 </>
               )}
             </View>
@@ -502,68 +526,6 @@ export function NewTaskRouteScreen({ route }: StaticScreenProps<NewTaskRoutePara
               })}
             </View>
           )}
-          {canStartScratch && scratchChoices.length > 0 && listScopes.length > 0 ? (
-            Platform.OS === "android" ? (
-              <View collapsable={false} className="overflow-hidden rounded-[28px] bg-card">
-                {scratchChoices.map((choice) => (
-                  <MaterialListRow
-                    key={choice.environmentId}
-                    title="No project"
-                    subtitle={choice.rowSubtitle}
-                    onPress={() => void startScratch(choice.environmentId)}
-                    leading={
-                      <SymbolView
-                        name="text.bubble"
-                        size={22}
-                        tintColorClassName="accent-icon-muted"
-                        type="monochrome"
-                      />
-                    }
-                  />
-                ))}
-              </View>
-            ) : (
-              <View collapsable={false} className="overflow-hidden rounded-[24px] bg-card">
-                {scratchChoices.map((choice, choiceIndex) => (
-                  <View
-                    key={choice.environmentId}
-                    className={cn(choiceIndex > 0 && "border-t border-border-subtle")}
-                  >
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={choice.rowLabel}
-                      onPress={() => void startScratch(choice.environmentId)}
-                      className="flex-row items-center gap-3 bg-card px-4 py-3.5"
-                    >
-                      <View className="h-7 w-7 items-center justify-center">
-                        <SymbolView
-                          name="text.bubble"
-                          size={18}
-                          tintColorClassName="accent-icon-muted"
-                          type="monochrome"
-                        />
-                      </View>
-                      <View className="min-w-0 flex-1">
-                        <Text className="text-base font-t3-bold leading-snug">No project</Text>
-                        <Text
-                          className="text-xs leading-snug text-foreground-muted"
-                          numberOfLines={1}
-                        >
-                          {choice.rowSubtitle}
-                        </Text>
-                      </View>
-                      <SymbolView
-                        name="chevron.right"
-                        size={14}
-                        tintColorClassName="accent-chevron"
-                        type="monochrome"
-                      />
-                    </Pressable>
-                  </View>
-                ))}
-              </View>
-            )
-          ) : null}
         </ScrollView>
       </MaterialScreenContent>
     </View>
