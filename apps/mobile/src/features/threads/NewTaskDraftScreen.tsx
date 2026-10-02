@@ -1455,71 +1455,76 @@ export function NewTaskDraftScreen(props: {
     navigation.dispatch(StackActions.push(routeName));
   };
 
-  const hero = (
-    <View className="items-center gap-6 px-6" testID="new-task-hero">
-      {/* A thread without a project has no project to name, so it asks plainly
-          and offers the project picker as its own control, like web. */}
-      {flow.isScratchDraft ? (
-        <View className="w-full items-center gap-3">
-          <Text className="text-center text-2xl font-t3-medium tracking-tight text-foreground">
-            What should we work on?
-          </Text>
-          <ComposerInlineControl
-            accessibilityHint="Opens the project picker"
-            accessibilityLabel="Choose a project"
-            chevronDirection="right"
-            disabled={isComposerInteractionLocked}
-            icon="folder"
-            label="Choose a project"
-            onPress={chooseProject}
-          />
-        </View>
-      ) : (
-        <View className="w-full items-center gap-1.5">
-          <Text className="text-center text-2xl font-t3-medium tracking-tight text-foreground">
-            What should we build
-          </Text>
-          <View className="max-w-full flex-row items-center justify-center">
-            <Text className="text-2xl font-t3-medium tracking-tight text-foreground">in </Text>
-            <Pressable
-              accessibilityHint="Opens the project picker"
-              accessibilityLabel={selectedProject.title}
-              accessibilityRole="button"
-              disabled={isComposerInteractionLocked}
-              onPress={chooseProject}
-              className="min-w-0 max-w-[250px] border-b border-foreground-muted active:opacity-65"
-            >
-              <Text
-                className="text-2xl font-t3-medium tracking-tight text-foreground"
-                numberOfLines={1}
-              >
-                {selectedProject.title}
-              </Text>
-            </Pressable>
-            <Text className="text-2xl font-t3-medium tracking-tight text-foreground">?</Text>
-          </View>
-        </View>
+  const environmentControl = (
+    <ComposerInlineControl
+      accessibilityLabel={`Environment: ${selectedEnvironmentLabel}`}
+      chevronDirection="right"
+      disabled={isComposerInteractionLocked || voiceInput.isBusy}
+      renderIcon={(size) => (
+        <EnvironmentMachineSymbol
+          kind={resolveEnvironmentMachineKind(selectedEnvironmentServerConfig)}
+          size={size}
+          tintColorClassName="accent-icon-muted"
+        />
       )}
+      label={`on ${selectedEnvironmentLabel}`}
+      maxWidth={flow.isScratchDraft ? 170 : 260}
+      onPress={
+        flow.environments.length > 1 ? () => openContextPicker("NewTaskEnvironment") : undefined
+      }
+      showChevron={flow.environments.length > 1}
+      static={flow.environments.length <= 1}
+    />
+  );
+  // A thread without a project has no project to name, so it asks plainly,
+  // like web, and puts the project picker beside the machine as a control.
+  const hero = flow.isScratchDraft ? (
+    <View className="items-center gap-2 px-6" testID="new-task-hero">
+      <Text className="text-center text-2xl font-t3-medium tracking-tight text-foreground">
+        What should we work on?
+      </Text>
+      {/* Wraps onto two lines only when a long machine name leaves no room. */}
+      <View className="flex-row flex-wrap items-center justify-center gap-x-1">
+        <ComposerInlineControl
+          accessibilityHint="Opens the project picker"
+          accessibilityLabel="Choose a project"
+          chevronDirection="right"
+          disabled={isComposerInteractionLocked}
+          icon="folder"
+          label="Choose a project"
+          onPress={chooseProject}
+        />
+        {environmentControl}
+      </View>
+    </View>
+  ) : (
+    <View className="items-center gap-6 px-6" testID="new-task-hero">
+      <View className="w-full items-center gap-1.5">
+        <Text className="text-center text-2xl font-t3-medium tracking-tight text-foreground">
+          What should we build
+        </Text>
+        <View className="max-w-full flex-row items-center justify-center">
+          <Text className="text-2xl font-t3-medium tracking-tight text-foreground">in </Text>
+          <Pressable
+            accessibilityHint="Opens the project picker"
+            accessibilityLabel={selectedProject.title}
+            accessibilityRole="button"
+            disabled={isComposerInteractionLocked}
+            onPress={chooseProject}
+            className="min-w-0 max-w-[250px] border-b border-foreground-muted active:opacity-65"
+          >
+            <Text
+              className="text-2xl font-t3-medium tracking-tight text-foreground"
+              numberOfLines={1}
+            >
+              {selectedProject.title}
+            </Text>
+          </Pressable>
+          <Text className="text-2xl font-t3-medium tracking-tight text-foreground">?</Text>
+        </View>
+      </View>
 
-      <ComposerInlineControl
-        accessibilityLabel={`Environment: ${selectedEnvironmentLabel}`}
-        chevronDirection="right"
-        disabled={isComposerInteractionLocked || voiceInput.isBusy}
-        renderIcon={(size) => (
-          <EnvironmentMachineSymbol
-            kind={resolveEnvironmentMachineKind(selectedEnvironmentServerConfig)}
-            size={size}
-            tintColorClassName="accent-icon-muted"
-          />
-        )}
-        label={`on ${selectedEnvironmentLabel}`}
-        maxWidth={260}
-        onPress={
-          flow.environments.length > 1 ? () => openContextPicker("NewTaskEnvironment") : undefined
-        }
-        showChevron={flow.environments.length > 1}
-        static={flow.environments.length <= 1}
-      />
+      {environmentControl}
     </View>
   );
   const heroViewport = (
